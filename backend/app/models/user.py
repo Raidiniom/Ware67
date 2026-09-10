@@ -3,7 +3,7 @@ import enum
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum as SAEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.base_class import Base
 
 
 class UserRole(str, enum.Enum):

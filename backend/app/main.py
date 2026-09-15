@@ -8,6 +8,7 @@ app = FastAPI(title="WARE67 API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://ware67.dcism.org",
         "https://ware67-api.dcism.org",
         "http://localhost:5173",
         "http://127.0.0.1:5173",

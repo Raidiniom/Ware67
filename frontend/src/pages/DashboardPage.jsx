@@ -1,21 +1,61 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
-import "./styles/Landing.css"
+import "./styles/common.css"
+import "./styles/DashboardPage.css"
+
+// Mirrors backend/schema/ware67_schema.sql — one card per table/entity.
+// These are placeholders until each module gets its own endpoints + UI.
+const ALL_MODULES = [
+    { key: "products", title: "Products", description: "SKUs, pricing, and reorder levels.", roles: null },
+    { key: "categories", title: "Categories", description: "Organize products into categories.", roles: null },
+    { key: "suppliers", title: "Suppliers", description: "Vendor contacts and details.", roles: null },
+    { key: "locations", title: "Locations", description: "Warehouses, aisles, shelves, and bins.", roles: null },
+    { key: "transactions", title: "Transactions", description: "Stock-in and stock-out history.", roles: null },
+    { key: "adjustments", title: "Inventory Adjustments", description: "Manual stock corrections, with a reason on record.", roles: null },
+    { key: "audit-logs", title: "Audit Logs", description: "Who did what, and when.", roles: ["ADMIN"] },
+    { key: "users", title: "Users & Roles", description: "Manage accounts and permissions.", roles: ["ADMIN", "MANAGER"] },
+]
 
 export default function DashboardPage() {
     const { user, logout } = useAuth()
-    const firstName = user?.name?.trim().split(/\s+/)[0] || "there"
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "https://ware67-api.dcism.org"
+    const navigate = useNavigate()
+
+    function handleLogout() {
+        logout()
+        navigate("/")
+    }
+
+    const modules = ALL_MODULES.filter((m) => !m.roles || m.roles.includes(user?.role))
+    const firstName = user?.name?.split(" ")[0] || "there"
 
     return (
-        <main className="dashboard-page">
-            <header className="dashboard-header"><Link to="/" className="brand-mark">WARE<span>67</span></Link><div className="dashboard-account"><div><strong>{user?.name}</strong><span>{user?.role || "STAFF"}</span></div><button type="button" className="logout-button" onClick={logout}>Sign out</button></div></header>
-            <section className="dashboard-welcome"><p className="eyebrow">YOUR WORKSPACE</p><h1>Good to see you, {firstName}.</h1><p>This is your WARE67 operations dashboard. The workspace is ready for the next inventory modules.</p></section>
-            <section className="dashboard-grid">
-                <article className="dashboard-panel dashboard-panel-featured"><span className="panel-index">01 / OVERVIEW</span><h2>Operations overview</h2><p>Inventory and activity insights will appear here as the next modules come online.</p><span className="panel-status">Coming next</span></article>
-                <article className="dashboard-panel"><span className="panel-index">02 / ACCOUNT</span><h2>Your profile</h2><dl><div><dt>Name</dt><dd>{user?.name}</dd></div><div><dt>Email</dt><dd>{user?.email}</dd></div><div><dt>Role</dt><dd>{user?.role}</dd></div></dl></article>
-                <article className="dashboard-panel"><span className="panel-index">03 / ACCESS</span><h2>API documentation</h2><p>Explore the endpoints available to your integrations.</p><a className="api-link" href={`${apiBaseUrl}/docs`} target="_blank" rel="noreferrer">Open Swagger UI <span aria-hidden="true">-&gt;</span></a></article>
+        <div className="dashboard">
+            <header className="dashboard-header">
+                <Link to="/" className="site-brand">WARE67</Link>
+                <button className="btn btn-outline" onClick={handleLogout}>Sign out</button>
+            </header>
+
+            <section className="dashboard-welcome">
+                <h1>Welcome back, {firstName} 👋</h1>
+                <p>
+                    Signed in as <strong>{user?.email}</strong>
+                    {user?.role && (
+                        <span className={`role-badge role-badge--${user.role.toLowerCase()}`}>
+                            {user.role}
+                        </span>
+                    )}
+                </p>
             </section>
-        </main>
+
+            <section className="dashboard-modules">
+                {modules.map((m) => (
+                    <div className="module-card" key={m.key}>
+                        <h3>{m.title}</h3>
+                        <p>{m.description}</p>
+                        <span className="module-status">Coming soon</span>
+                    </div>
+                ))}
+            </section>
+        </div>
     )
 }

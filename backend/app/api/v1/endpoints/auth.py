@@ -98,15 +98,6 @@ def read_current_user(current_user: User = Depends(get_current_user)):
 
 @router.post("/forgot-password", response_model=MessageResponse)
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    # No email/SMS provider available on this host, so there's no reset
-    # link — the account is verified with email + full name, then the
-    # password is changed immediately.
-    #
-    # NOTE: this is a much weaker check than a real "forgot password" flow
-    # (anyone who knows a user's email + name can change their password —
-    # both are often not-very-secret in a small org). It's a reasonable
-    # trade-off given no outbound email is available, but if that changes
-    # later, prefer swapping this for an emailed, single-use reset link.
     verification_error = HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="We couldn't verify those account details. Double-check your email and full name.",

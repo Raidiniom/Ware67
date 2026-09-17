@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.errors import register_exception_handlers
 from app.api.v1.api import api_router
 
 app = FastAPI(title="WARE67 API")
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,

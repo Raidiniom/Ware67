@@ -47,6 +47,21 @@ backend/
 
 ## 3. Adding a New API Endpoint
 
+### 3.0 Shared error handling
+
+The application registers its shared exception handlers in
+`app/api/errors.py`. Keep endpoint errors consistent with the existing API:
+
+- Raise `HTTPException` for ordinary endpoint errors such as 401, 403, and 404.
+- Raise `AppError` from service or shared application code when an HTTP-aware
+  error must cross layers.
+- Request validation failures return `422` with FastAPI's validation details.
+- Database constraint conflicts return `409` without exposing SQL or schema
+  internals.
+- Other database and unexpected failures return a safe `500` message and are
+  logged server-side.
+- The database dependency automatically rolls back a failed transaction.
+
 ### 3.1 Naming & REST conventions
 
 - Plural nouns for resources: `/products`, `/suppliers`, not `/product` or `/getProducts`

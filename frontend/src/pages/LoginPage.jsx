@@ -13,7 +13,7 @@ export default function LoginPage() {
     const [error, setError] = useState("")
     const [submitting, setSubmitting] = useState(false)
 
-    const from = location.state?.from?.pathname || "/"
+    const from = location.state?.from?.pathname || "/dashboard"
     const justRegistered = location.state?.registered
 
     async function handleSubmit(e) {

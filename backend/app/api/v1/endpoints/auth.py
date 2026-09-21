@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from jose import JWTError
 
+from app.api.deps import get_current_user, require_roles
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -15,19 +16,22 @@ from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
+    OnboardRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
+    UpdateRoleRequest,
+    UpdateStatusRequest,
     UserRead,
 )
-from app.api.deps import get_current_user
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email).first()
+    existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -35,22 +39,38 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         )
 
     user = User(
-        name=payload.name,
-        email=payload.email,
+        name=payload.name.strip(),
+        email=payload.email.lower(),
         password=hash_password(payload.password),
-        role=UserRole.STAFF,
+        role=UserRole.GUEST,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    log_audit(
+        db,
+        user_id=user.id,
+        action="REGISTER",
+        entity="users",
+        entity_id=user.id,
+        details={"email": user.email, "role": user.role.value},
+    )
     return user
 
 
 @router.post("/login", response_model=TokenPair)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(User.email == payload.email.lower()).first()
 
     if not user or not verify_password(payload.password, user.password):
+        log_audit(
+            db,
+            user_id=None,
+            action="LOGIN_FAILED",
+            entity="users",
+            details={"email": payload.email.lower()},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -60,6 +80,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has been deactivated",
         )
+
+    log_audit(
+        db,
+        user_id=user.id,
+        action="LOGIN",
+        entity="users",
+        entity_id=user.id,
+        details={"email": user.email, "role": user.role.value},
+    )
 
     return TokenPair(
         access_token=create_access_token(user_id=user.id, role=user.role.value),
@@ -85,6 +114,15 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     if user is None or not user.is_active:
         raise credentials_exception
 
+    log_audit(
+        db,
+        user_id=user.id,
+        action="REFRESH_TOKEN",
+        entity="users",
+        entity_id=user.id,
+        details={"role": user.role.value},
+    )
+
     return TokenPair(
         access_token=create_access_token(user_id=user.id, role=user.role.value),
         refresh_token=create_refresh_token(user_id=user.id),
@@ -98,28 +136,104 @@ def read_current_user(current_user: User = Depends(get_current_user)):
 
 @router.post("/forgot-password", response_model=MessageResponse)
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    # No email/SMS provider available on this host, so there's no reset
-    # link — the account is verified with email + full name, then the
-    # password is changed immediately.
-    #
-    # NOTE: this is a much weaker check than a real "forgot password" flow
-    # (anyone who knows a user's email + name can change their password —
-    # both are often not-very-secret in a small org). It's a reasonable
-    # trade-off given no outbound email is available, but if that changes
-    # later, prefer swapping this for an emailed, single-use reset link.
-    verification_error = HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="We couldn't verify those account details. Double-check your email and full name.",
-    )
-
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not user.is_active:
-        raise verification_error
-
-    if user.name.strip().lower() != payload.name.strip().lower():
-        raise verification_error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="We couldn't find an active account with that email.",
+        )
 
     user.password = hash_password(payload.new_password)
     db.commit()
 
+    log_audit(
+        db,
+        user_id=user.id,
+        action="FORGOT_PASSWORD",
+        entity="users",
+        entity_id=user.id,
+        details={"email": user.email},
+    )
+
     return MessageResponse(message="Your password has been changed. You can now log in with your new password.")
+
+
+@router.post("/onboard", response_model=UserRead)
+def onboard(payload: OnboardRequest, db: Session = Depends(get_db), current_user: User = Depends(require_roles("ADMIN", "MANAGER"))):
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    old_role = user.role.value
+
+    try:
+        new_role = UserRole(payload.role)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+
+    user.role = new_role
+    user.is_active = payload.is_active
+    db.commit()
+    db.refresh(user)
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        action="ONBOARD",
+        entity="users",
+        entity_id=user.id,
+        details={"old_role": old_role, "new_role": new_role.value, "is_active": user.is_active},
+    )
+    return user
+
+
+@router.patch("/update-role", response_model=UserRead)
+def update_role(payload: UpdateRoleRequest, db: Session = Depends(get_db), current_user: User = Depends(require_roles("ADMIN"))):
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    try:
+        user.role = UserRole(payload.role)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+
+    db.commit()
+    db.refresh(user)
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        action="UPDATE_ROLE",
+        entity="users",
+        entity_id=user.id,
+        details={"new_role": user.role.value},
+    )
+    return user
+
+
+@router.patch("/update-status", response_model=UserRead)
+def update_status(payload: UpdateStatusRequest, db: Session = Depends(get_db), current_user: User = Depends(require_roles("ADMIN", "MANAGER"))):
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.is_active = payload.is_active
+    db.commit()
+    db.refresh(user)
+
+    log_audit(
+        db,
+        user_id=current_user.id,
+        action="UPDATE_STATUS",
+        entity="users",
+        entity_id=user.id,
+        details={"is_active": user.is_active},
+    )
+    return user
+
+
+@router.get("/users", response_model=list[UserRead])
+def list_users(db: Session = Depends(get_db), current_user: User = Depends(require_roles("ADMIN"))):
+    _ = current_user
+    return db.query(User).order_by(User.created_at.desc()).all()

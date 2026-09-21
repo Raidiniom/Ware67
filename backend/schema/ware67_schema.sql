@@ -45,7 +45,7 @@ CREATE TABLE users (
     name        VARCHAR(150)  NOT NULL,
     email       VARCHAR(150)  NOT NULL,
     password    VARCHAR(255)  NOT NULL,
-    role        ENUM('ADMIN', 'MANAGER', 'STAFF') NOT NULL DEFAULT 'STAFF',
+    role        ENUM('GUEST', 'STAFF', 'MANAGER', 'ADMIN') NOT NULL DEFAULT 'GUEST',
     role_id     CHAR(36)      NULL,
     is_active   BOOLEAN       NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,

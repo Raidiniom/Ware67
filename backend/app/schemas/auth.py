@@ -35,14 +35,36 @@ class RegisterRequest(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    # No email/SMS service available, so there's no reset link/token step.
-    # Instead we ask for email + the full name on the account as a light
-    # identity check, then set the new password directly. See the note in
-    # CHANGES.md about the security trade-off this makes.
     email: EmailStr
-    name: str = Field(min_length=1, max_length=150)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class OnboardRequest(BaseModel):
+    user_id: str
+    role: str
+    is_active: bool = True
+
+
+class UpdateRoleRequest(BaseModel):
+    user_id: str
+    role: str
+
+
+class UpdateStatusRequest(BaseModel):
+    user_id: str
+    is_active: bool
 
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class UserListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    email: EmailStr
+    role: str
+    is_active: bool
+    created_at: datetime

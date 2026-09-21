@@ -114,15 +114,6 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     if user is None or not user.is_active:
         raise credentials_exception
 
-    log_audit(
-        db,
-        user_id=user.id,
-        action="REFRESH_TOKEN",
-        entity="users",
-        entity_id=user.id,
-        details={"role": user.role.value},
-    )
-
     return TokenPair(
         access_token=create_access_token(user_id=user.id, role=user.role.value),
         refresh_token=create_refresh_token(user_id=user.id),

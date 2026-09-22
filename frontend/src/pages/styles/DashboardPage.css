@@ -43,7 +43,16 @@
 
 .module-card--available {
   border-color: var(--accent-border);
-  background: var(--accent-bg);
+  background: #f7effc;
+  color: #4f4857;
+}
+
+.module-card--available h3 {
+  color: #17121c;
+}
+
+.module-card--available p {
+  color: #4f4857;
 }
 
 .module-card h3 {

@@ -1,7 +1,14 @@
 .products-page {
+  --products-surface: #ffffff;
+  --products-background: #f3f1eb;
+  --products-text: #17211f;
+  --products-muted: #625f58;
+  --products-border: #d8d5cc;
   flex: 1;
   padding: 32px;
   text-align: left;
+  color: var(--products-text);
+  background: var(--products-background);
 }
 
 .products-header,
@@ -16,11 +23,12 @@
 .products-header h1 {
   margin: 8px 0 6px;
   font-size: 32px;
+  color: var(--products-text);
 }
 
 .products-header p,
 .product-form-heading p {
-  color: var(--text);
+  color: var(--products-muted);
 }
 
 .products-back {
@@ -37,7 +45,7 @@
 .products-search label {
   display: block;
   margin-bottom: 6px;
-  color: var(--text-h);
+  color: var(--products-text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -51,10 +59,10 @@
 .products-search input,
 .product-form input,
 .product-form textarea {
-  border: 1px solid var(--border);
+  border: 1px solid var(--products-border);
   border-radius: 8px;
-  background: var(--bg);
-  color: var(--text-h);
+  background: var(--products-surface);
+  color: var(--products-text);
   padding: 10px 12px;
 }
 
@@ -63,7 +71,7 @@
 }
 
 .products-count {
-  color: var(--text);
+  color: var(--products-muted);
   font-size: 14px;
 }
 
@@ -78,9 +86,10 @@
 
 .product-form-card,
 .products-table-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--products-border);
   border-radius: 12px;
-  background: var(--bg);
+  background: var(--products-surface);
+  color: var(--products-text);
 }
 
 .product-form-card {
@@ -92,6 +101,7 @@
 .products-empty h2 {
   margin: 0 0 4px;
   font-size: 20px;
+  color: var(--products-text);
 }
 
 .product-form {
@@ -105,7 +115,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--text-h);
+  color: var(--products-text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -137,14 +147,14 @@
 .products-table th,
 .products-table td {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--products-border);
   text-align: left;
   vertical-align: middle;
 }
 
 .products-table th {
-  color: var(--text);
-  background: var(--social-bg);
+  color: var(--products-muted);
+  background: #f7f5ef;
   font-size: 12px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -161,7 +171,7 @@
 
 .products-table td small {
   margin-top: 3px;
-  color: var(--text);
+  color: var(--products-muted);
 }
 
 .products-table code {
@@ -186,7 +196,7 @@
 .products-empty {
   padding: 48px 20px;
   text-align: center;
-  color: var(--text);
+  color: var(--products-muted);
 }
 
 @media (max-width: 700px) {

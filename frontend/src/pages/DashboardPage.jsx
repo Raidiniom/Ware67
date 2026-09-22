@@ -6,7 +6,7 @@ import "./styles/DashboardPage.css"
 // Mirrors backend/schema/ware67_schema.sql — one card per table/entity.
 // These are placeholders until each module gets its own endpoints + UI.
 const ALL_MODULES = [
-    { key: "products", title: "Products", description: "SKUs, pricing, and reorder levels.", roles: null },
+    { key: "products", title: "Products", description: "SKUs, pricing, and reorder levels.", roles: null, href: "/products" },
     { key: "categories", title: "Categories", description: "Organize products into categories.", roles: null },
     { key: "suppliers", title: "Suppliers", description: "Vendor contacts and details.", roles: null },
     { key: "locations", title: "Locations", description: "Warehouses, aisles, shelves, and bins.", roles: null },
@@ -49,10 +49,14 @@ export default function DashboardPage() {
 
             <section className="dashboard-modules">
                 {modules.map((m) => (
-                    <div className="module-card" key={m.key}>
+                    <div className={`module-card${m.href ? " module-card--available" : ""}`} key={m.key}>
                         <h3>{m.title}</h3>
                         <p>{m.description}</p>
-                        <span className="module-status">Coming soon</span>
+                        {m.href ? (
+                            <Link to={m.href} className="module-link">Open module →</Link>
+                        ) : (
+                            <span className="module-status">Coming soon</span>
+                        )}
                     </div>
                 ))}
             </section>

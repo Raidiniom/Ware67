@@ -41,6 +41,11 @@
   text-align: left;
 }
 
+.module-card--available {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
 .module-card h3 {
   margin: 0 0 6px;
   font-size: 17px;
@@ -60,4 +65,15 @@
   background: var(--code-bg);
   padding: 3px 9px;
   border-radius: 999px;
+}
+
+.module-link {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.module-link:hover {
+  text-decoration: underline;
 }

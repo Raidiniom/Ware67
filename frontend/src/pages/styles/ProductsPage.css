@@ -183,6 +183,10 @@
   font-size: 13px;
 }
 
+.product-row-actions .btn-ghost {
+  color: #111111;
+}
+
 .product-delete {
   color: #b42318;
   border-color: rgba(180, 35, 24, 0.35);

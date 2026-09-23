@@ -13,7 +13,7 @@ const ALL_MODULES = [
     { key: "transactions", title: "Transactions", description: "Stock-in and stock-out history.", roles: null },
     { key: "adjustments", title: "Inventory Adjustments", description: "Manual stock corrections, with a reason on record.", roles: null },
     { key: "audit-logs", title: "Audit Logs", description: "Who did what, and when.", roles: ["ADMIN"] },
-    { key: "users", title: "Users & Roles", description: "Manage accounts and permissions.", roles: ["ADMIN", "MANAGER"] },
+    { key: "users", title: "Users & Roles", description: "Manage accounts and permissions.", roles: ["ADMIN", "MANAGER"], href: "/users" },
 ]
 
 export default function DashboardPage() {

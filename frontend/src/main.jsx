@@ -10,6 +10,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
+import UsersPage from './pages/UsersPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -33,6 +34,14 @@ createRoot(document.getElementById('root')).render(
             element={
               <ProtectedRoute>
                 <ProductsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UsersPage />
               </ProtectedRoute>
             }
           />

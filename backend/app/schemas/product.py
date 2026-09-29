@@ -33,7 +33,7 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    pass
+    initial_stock: int = Field(default=0, ge=0, le=1_000_000)
 
 
 class ProductUpdate(BaseModel):
@@ -70,5 +70,6 @@ class ProductRead(ProductBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    current_stock: int
     created_at: datetime
     updated_at: datetime

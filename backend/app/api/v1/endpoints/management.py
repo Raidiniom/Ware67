@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -53,6 +53,7 @@ def list_managed_users(
 @router.post("/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def create_managed_user(
     payload: UserCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
 ):
@@ -61,7 +62,7 @@ def create_managed_user(
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     role = _role_value(payload.role)
     if current_user.role == UserRole.MANAGER and role in (UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(status_code=403, detail="Managers can only create guest or staff accounts")
+        raise HTTPException(status_code=403, detail="Managers can only create staff accounts")
 
     user = User(
         name=payload.name,
@@ -71,9 +72,11 @@ def create_managed_user(
     )
     db.add(user)
     _set_user_role(db, user, role.value)
+    db.flush()                                   # populate user.id
+    log_audit(db, user_id=current_user.id, action="CREATE", entity="USER",
+              entity_id=user.id, details={"role": role.value, "email": email}, request=request)
     db.commit()
     db.refresh(user)
-    log_audit(db, user_id=current_user.id, action="CREATE", entity="users", entity_id=user.id, details={"role": role.value})
     return user
 
 
@@ -81,12 +84,20 @@ def create_managed_user(
 def update_managed_user(
     user_id: str,
     payload: UserUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # NEW: managers may not touch admin/manager accounts (password, email, active flag, role)
+    if (current_user.role == UserRole.MANAGER
+            and user.id != current_user.id
+            and user.role in (UserRole.ADMIN, UserRole.MANAGER)):
+        raise HTTPException(status_code=403, detail="Managers cannot modify administrator or manager accounts")
+
     changes = payload.model_dump(exclude_unset=True)
     requested_role = changes.get("role")
     if requested_role is not None:
@@ -108,13 +119,16 @@ def update_managed_user(
         changes["password"] = hash_password(changes["password"])
     for field, value in changes.items():
         setattr(user, field, value)
+
+    log_audit(db, user_id=current_user.id, action="UPDATE", entity="USER", entity_id=user.id,
+              details={"changed_fields": sorted(payload.model_dump(exclude_unset=True))},
+              request=request)                   # field names only, never the password
     try:
         db.commit()
     except IntegrityError as error:
         db.rollback()
         raise HTTPException(status_code=409, detail="User could not be updated") from error
     db.refresh(user)
-    log_audit(db, user_id=current_user.id, action="UPDATE", entity="users", entity_id=user.id, details={"changed_fields": sorted(payload.model_dump(exclude_unset=True))})
     return user
 
 
@@ -133,13 +147,15 @@ def list_roles(
 def update_role_description(
     role_name: str,
     payload: RoleUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN")),
 ):
     role = _role_value(role_name)
     record = _get_or_create_role(db, role)
     record.description = payload.description.strip() if payload.description else None
+    log_audit(db, user_id=current_user.id, action="UPDATE", entity="ROLE",
+              entity_id=record.id, details={"role": role.value}, request=request)
     db.commit()
     db.refresh(record)
-    log_audit(db, user_id=current_user.id, action="UPDATE", entity="roles", entity_id=record.id, details={"role": role.value})
     return record

@@ -86,3 +86,7 @@
 .module-link:hover {
   text-decoration: underline;
 }
+
+.module-card--link { display: block; color: inherit; text-decoration: none; transition: border-color 0.2s, box-shadow 0.2s; }
+.module-card--link:hover { border-color: var(--accent-border); box-shadow: var(--shadow); }
+.module-card--link .module-status { background: var(--accent-bg); color: var(--accent); }

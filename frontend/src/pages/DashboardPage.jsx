@@ -48,17 +48,20 @@ export default function DashboardPage() {
             </section>
 
             <section className="dashboard-modules">
-                {modules.map((m) => (
-                    <div className={`module-card${m.href ? " module-card--available" : ""}`} key={m.key}>
-                        <h3>{m.title}</h3>
-                        <p>{m.description}</p>
-                        {m.href ? (
-                            <Link to={m.href} className="module-link">Open module →</Link>
-                        ) : (
-                            <span className="module-status">Coming soon</span>
-                        )}
-                    </div>
-                ))}
+                {modules.map((m) => {
+                    const body = (
+                        <>
+                            <h3>{m.title}</h3>
+                            <p>{m.description}</p>
+                            <span className="module-status">{m.path ? "Open" : "Coming soon"}</span>
+                        </>
+                    )
+                    return m.path ? (
+                        <Link className="module-card module-card--link" key={m.key} to={m.path}>{body}</Link>
+                    ) : (
+                        <div className="module-card" key={m.key}>{body}</div>
+                    )
+                })}
             </section>
         </div>
     )

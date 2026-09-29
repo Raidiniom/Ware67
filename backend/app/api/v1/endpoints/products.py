@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.category import Category
-# from app.models.location import Location
+from app.models.location import Location
 from app.models.product import Product
-# from app.models.supplier import Supplier
-# from app.models.transaction import Transaction
+from app.models.supplier import Supplier
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.services.audit import log_audit
@@ -20,8 +20,8 @@ writer = require_roles("ADMIN", "MANAGER")
 
 REFS = (
     ("category_id", Category, "Category"),
-    # ("supplier_id", Supplier, "Supplier"),
-    # ("location_id", Location, "Location"),
+    ("supplier_id", Supplier, "Supplier"),
+    ("location_id", Location, "Location"),
 )
 
 
@@ -96,17 +96,17 @@ def create_product(payload: ProductCreate, request: Request,
               entity_id=product.id, details={"sku": product.sku, "name": product.name},
               request=request)
 
-    # if initial_stock > 0:                    # opening stock gets a history row
-    #     txn = Transaction(product_id=product.id, user_id=current_user.id, type="STOCK_IN",
-    #                       quantity=initial_stock, reference_type="INITIAL", notes="Opening stock")
-    #     db.add(txn)
-    #     db.flush()
-    #     log_audit(db, user_id=current_user.id, action="STOCK_IN", entity="TRANSACTION",
-    #               entity_id=txn.id,
-    #               details={"product_id": product.id, "quantity": initial_stock,
-    #                        "previous_value": 0, "new_value": initial_stock,
-    #                        "reference_type": "INITIAL"},
-    #               request=request)
+    if initial_stock > 0:                    # opening stock gets a history row
+        txn = Transaction(product_id=product.id, user_id=current_user.id, type="STOCK_IN",
+                          quantity=initial_stock, reference_type="INITIAL", notes="Opening stock")
+        db.add(txn)
+        db.flush()
+        log_audit(db, user_id=current_user.id, action="STOCK_IN", entity="TRANSACTION",
+                  entity_id=txn.id,
+                  details={"product_id": product.id, "quantity": initial_stock,
+                           "previous_value": 0, "new_value": initial_stock,
+                           "reference_type": "INITIAL"},
+                  request=request)
     try:
         db.commit()
     except IntegrityError:
@@ -122,7 +122,7 @@ def update_product(product_id: str, payload: ProductUpdate, request: Request,
     product = _get_product_or_404(product_id, db)
     changes = payload.model_dump(exclude_unset=True)
 
-    for f in ("sku", "name", "price", "reorder_leve"):
+    for f in ("sku", "name", "price", "reorder_level"):
         if changes.get(f, "") is None:
             changes.pop(f)
 

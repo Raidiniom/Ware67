@@ -57,3 +57,9 @@
   .record-form { grid-template-columns: 1fr; }
   .field--half { grid-column: 1 / -1; }
 }
+
+.field select, .toolbar select { font: inherit; }
+.field select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-h); }
+.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-h); cursor: pointer; }
+.badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge--warn { background: rgba(234, 88, 12, 0.12); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.4); }

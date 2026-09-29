@@ -41,3 +41,12 @@ export const locationsApi = {
     ...createResource("/locations"),
     warehouses: async () => (await client.get("/locations/warehouses")).data,
 }
+
+export const productsApi = {
+    list: async (params) => (await client.get("/products", { params: cleanParams(params) })).data,
+    create: async (body) => (await client.post("/products", body)).data,
+    update: async (id, body) => (await client.patch(`/products/${id}`, body)).data,
+    remove: async (id) => {
+        await client.delete(`/products/${id}`)
+    },
+}

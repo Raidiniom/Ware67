@@ -10,6 +10,10 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
+import UsersPage from './pages/UsersPage.jsx'
+import CategoriesPage from './pages/CategoriesPage.jsx'
+import SuppliersPage from './pages/SuppliersPage.jsx'
+import LocationsPage from './pages/LocationsPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -33,6 +37,38 @@ createRoot(document.getElementById('root')).render(
             element={
               <ProtectedRoute>
                 <ProductsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/categories"
+            element={
+              <ProtectedRoute>
+                <CategoriesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/suppliers"
+            element={
+              <ProtectedRoute>
+                <SuppliersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/locations"
+            element={
+              <ProtectedRoute>
+                <LocationsPage />
               </ProtectedRoute>
             }
           />

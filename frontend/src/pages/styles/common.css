@@ -4,13 +4,17 @@
   justify-content: center;
   gap: 6px;
   padding: 9px 16px;
-  border-radius: 8px;
+  border-radius: 0;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: opacity 0.2s, background-color 0.2s, border-color 0.2s;
+  transition: 
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .btn-lg {
@@ -19,29 +23,34 @@
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--dashboard-green);
+  border-color: var(--dashboard-green-dark);
   color: #fff;
 }
 .btn-primary:hover {
-  opacity: 0.9;
+  background: var(--dashboard-green);
+  border-color: var(--dashboard-green-dark);
+  opacity: 1;
+  transform: translateY(-1.5px);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-h);
-  border-color: var(--border);
+  border-color: var(--dashboard-line);
+  color: var(--dashboard-ink);
 }
 .btn-ghost:hover {
-  background: var(--social-bg);
+  background: var(--dashboard-white);
+  border-color: var(--dashboard-ink);
 }
 
 .btn-outline {
   background: transparent;
-  color: var(--accent);
-  border-color: var(--accent-border);
+  color: var(--dashboard-green);
+  border-color: var(--dashboard-green-dark);
 }
 .btn-outline:hover {
-  background: var(--accent-bg);
+  background: var(--dashboard-green-soft);
 }
 
 .role-badge {

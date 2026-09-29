@@ -11,6 +11,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
+from app.models.role import Role
 from app.models.user import User, UserRole
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -29,6 +30,15 @@ from app.services.audit import log_audit
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _ensure_role_record(db: Session, role: UserRole) -> Role:
+    record = db.query(Role).filter(Role.name == role.value).first()
+    if record is None:
+        record = Role(name=role.value, description=f"{role.value.title()} access")
+        db.add(record)
+        db.flush()
+    return record
+
+
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email.lower()).first()
@@ -44,6 +54,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         password=hash_password(payload.password),
         role=UserRole.GUEST,
     )
+    user.role_id = _ensure_role_record(db, UserRole.GUEST).id
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -163,6 +174,7 @@ def onboard(payload: OnboardRequest, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
     user.role = new_role
+    user.role_id = _ensure_role_record(db, new_role).id
     user.is_active = payload.is_active
     db.commit()
     db.refresh(user)
@@ -185,7 +197,9 @@ def update_role(payload: UpdateRoleRequest, db: Session = Depends(get_db), curre
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     try:
-        user.role = UserRole(payload.role)
+        new_role = UserRole(payload.role)
+        user.role = new_role
+        user.role_id = _ensure_role_record(db, new_role).id
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
@@ -224,7 +238,3 @@ def update_status(payload: UpdateStatusRequest, db: Session = Depends(get_db), c
     return user
 
 
-@router.get("/users", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db), current_user: User = Depends(require_roles("ADMIN"))):
-    _ = current_user
-    return db.query(User).order_by(User.created_at.desc()).all()

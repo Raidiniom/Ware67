@@ -1,0 +1,167 @@
+/* =========================================================
+   WARE67 LEDGER PAGES (transactions, adjustments, audit logs)
+   Extends Resource.css using the same dashboard tokens
+   ========================================================= */
+
+/* Date range inputs in the toolbar */
+.toolbar .date-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--dashboard-muted);
+	font: 800 8px Arial, sans-serif;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.toolbar input[type="date"] {
+	box-sizing: border-box;
+	min-height: 40px;
+	padding: 9px 12px;
+	border: 1px solid var(--dashboard-line);
+	border-radius: 0;
+	background: var(--dashboard-paper-bright);
+	color: var(--dashboard-ink);
+	font: 12px Arial, sans-serif;
+	outline: none;
+	transition:
+		border-color 0.2s ease,
+		background 0.2s ease;
+}
+
+.toolbar input[type="date"]:focus {
+	border-color: var(--dashboard-green);
+	background: var(--dashboard-white);
+}
+
+.toolbar .link-btn {
+	font: 800 9px Arial, sans-serif;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+/* Two-line cells (name + sku, user + email) */
+.cell-stack strong {
+	display: block;
+	font: 700 12px Arial, sans-serif;
+	color: var(--dashboard-ink);
+}
+
+.cell-stack small {
+	display: block;
+	margin-top: 3px;
+	color: var(--dashboard-muted);
+	font: 10px Arial, sans-serif;
+}
+
+.cell-nowrap {
+	white-space: nowrap;
+}
+
+/* Type / action pills */
+.pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 8px;
+	font: 800 8px Arial, sans-serif;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	background: var(--dashboard-green-soft);
+	color: var(--dashboard-green);
+}
+
+.pill--in {
+	background: rgba(201, 223, 99, 0.35);
+	color: #5e7215;
+}
+
+.pill--out {
+	background: rgba(233, 120, 69, 0.14);
+	color: #b5522a;
+}
+
+.pill--neutral {
+	background: rgba(216, 217, 210, 0.5);
+	color: var(--dashboard-muted);
+}
+
+.pill--danger {
+	background: rgba(180, 35, 24, 0.09);
+	color: #b42318;
+}
+
+/* Signed quantities */
+.qty {
+	font: 700 12px Arial, sans-serif;
+	font-variant-numeric: tabular-nums;
+}
+
+.qty--pos {
+	color: var(--dashboard-green);
+}
+
+.qty--neg {
+	color: #b5522a;
+}
+
+/* Form helper text under a field */
+.field-hint {
+	margin: 0;
+	color: var(--dashboard-muted);
+	font: 11px/1.5 Arial, sans-serif;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+/* Audit log detail modal */
+.detail-grid {
+	display: grid;
+	grid-template-columns: 110px 1fr;
+	gap: 10px 16px;
+	margin: 0 0 18px;
+	font: 12px/1.45 Arial, sans-serif;
+}
+
+.detail-grid dt {
+	color: var(--dashboard-muted);
+	font: 800 8px Arial, sans-serif;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	padding-top: 3px;
+}
+
+.detail-grid dd {
+	margin: 0;
+	color: var(--dashboard-ink);
+	overflow-wrap: anywhere;
+}
+
+.detail-json {
+	margin: 0;
+	padding: 12px 14px;
+	max-height: 280px;
+	overflow: auto;
+	background: var(--dashboard-paper);
+	border: 1px solid var(--dashboard-line);
+	color: var(--dashboard-ink);
+	font: 11px/1.55 "Courier New", monospace;
+	text-align: left;
+}
+
+@media (max-width: 640px) {
+	.toolbar .date-field {
+		flex: 1 1 100%;
+		justify-content: space-between;
+	}
+
+	.detail-grid {
+		grid-template-columns: 1fr;
+		gap: 4px;
+	}
+
+	.detail-grid dd {
+		margin-bottom: 8px;
+	}
+}

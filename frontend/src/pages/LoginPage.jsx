@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
-import "./styles/Auth.css"
+import AuthShell from "../components/AuthShell"
 
 export default function LoginPage() {
     const { login } = useAuth()
@@ -32,17 +32,27 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="auth-page">
-            <form className="auth-card" onSubmit={handleSubmit}>
-                <h1>Sign in</h1>
-                <p className="auth-subtitle">Welcome back to WARE67</p>
-
+        <AuthShell
+            eyebrow="WARE67 / SIGN IN"
+            title="Sign in"
+            subtitle="Welcome back to WARE67."
+            footer={
+                <>
+                    Don&apos;t have an account? <Link to="/register">Create one</Link>
+                </>
+            }
+        >
+            <form onSubmit={handleSubmit}>
                 {justRegistered && (
-                    <div className="auth-success" style={{ marginBottom: 16 }}>
+                    <div className="auth-success" role="status">
                         Account created! Sign in with your new credentials.
                     </div>
                 )}
-                {error && <div className="auth-error">{error}</div>}
+                {error && (
+                    <div className="auth-error" role="alert">
+                        {error}
+                    </div>
+                )}
 
                 <label className="auth-field">
                     <span>Email</span>
@@ -72,12 +82,9 @@ export default function LoginPage() {
 
                 <button type="submit" className="auth-submit" disabled={submitting}>
                     {submitting ? "Signing in…" : "Sign in"}
+                    <span>→</span>
                 </button>
-
-                <p className="auth-footer">
-                    Don&apos;t have an account? <Link to="/register">Create one</Link>
-                </p>
             </form>
-        </div>
+        </AuthShell>
     )
 }

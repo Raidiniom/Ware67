@@ -7,9 +7,10 @@ from app.db.base_class import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    MANAGER = "MANAGER"
+    GUEST = "GUEST"
     STAFF = "STAFF"
+    MANAGER = "MANAGER"
+    ADMIN = "ADMIN"
 
 
 class User(Base):
@@ -19,7 +20,7 @@ class User(Base):
     name = Column(String(150), nullable=False)
     email = Column(String(150), nullable=False, unique=True, index=True)
     password = Column(String(255), nullable=False)
-    role = Column(SAEnum(UserRole), nullable=False, default=UserRole.STAFF)
+    role = Column(SAEnum(UserRole), nullable=False, default=UserRole.GUEST)
     role_id = Column(String(36), ForeignKey("roles.id", onupdate="CASCADE", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, server_default=func.now())

@@ -1,0 +1,299 @@
+/* =========================================================
+   WARE67 READABILITY PASS
+   Loaded LAST (see main.jsx) so it overrides earlier sizes.
+   Only font sizes and container widths change; layout,
+   colors and typefaces stay as designed.
+
+   To tune: edit the numbers below. To undo: delete this file
+   and its import in main.jsx.
+   ========================================================= */
+
+/* --------------------------------
+   WIDER PAGE CONTAINER (1240 -> 1600, for large monitors)
+-------------------------------- */
+
+.landing-nav,
+.landing-hero,
+.api-section,
+.landing-footer,
+.dashboard-header,
+.dashboard-welcome,
+.dashboard-content,
+.dashboard-footer,
+.page-shell-header,
+.page-shell-main {
+	max-width: 1600px;
+}
+
+/* --------------------------------
+   LANDING
+-------------------------------- */
+
+.landing-nav-links {
+	font-size: 14px;
+}
+
+.eyebrow,
+.panel-index,
+.strip-number,
+.meta-label,
+.card-kicker,
+.api-card-footer > span,
+.eyebrow-code {
+	font-size: 11px;
+}
+
+.hero-description {
+	font-size: 18px;
+}
+
+.primary-button,
+.text-button,
+.api-link {
+	font-size: 14px;
+}
+
+.hero-meta strong {
+	font-size: 13px;
+}
+
+.hero-aside-card p,
+.landing-strip p,
+.api-section p {
+	font-size: 14px;
+}
+
+.api-pills span {
+	font-size: 11px;
+}
+
+.landing-footer {
+	font-size: 13px;
+}
+
+/* --------------------------------
+   DASHBOARD
+-------------------------------- */
+
+.dashboard-user strong,
+.dashboard-account-info strong {
+	font-size: 13px;
+}
+
+.dashboard-user-status,
+.dashboard-account-info > div > span:first-child {
+	font-size: 10px;
+}
+
+.dashboard-signout {
+	font-size: 12px;
+}
+
+.dashboard-eyebrow,
+.section-label,
+.module-number {
+	font-size: 11px;
+}
+
+.role-badge {
+	font-size: 11px !important;
+}
+
+.modules-heading > p {
+	font-size: 14px;
+}
+
+.module-category,
+.module-status {
+	font-size: 10px;
+}
+
+.module-card h3 {
+	font-size: 22px;
+}
+
+.module-card p {
+	font-size: 13px;
+}
+
+.dashboard-footer {
+	font-size: 11px;
+}
+
+/* --------------------------------
+   RESOURCE PAGES (tables, toolbar, forms, modals)
+-------------------------------- */
+
+.page-title-row p {
+	font-size: 14px;
+}
+
+.muted {
+	font-size: 12px;
+}
+
+.toolbar input[type="search"],
+.toolbar select,
+.toolbar input[type="date"] {
+	font-size: 14px;
+}
+
+.data-table {
+	font-size: 14px;
+}
+
+.data-table th {
+	font-size: 11px;
+}
+
+.table-state {
+	font-size: 13px;
+}
+
+.pager {
+	font-size: 12px;
+}
+
+.btn-sm {
+	font-size: 12px;
+}
+
+.btn {
+	font-size: 14px;
+}
+
+.toast {
+	font-size: 11px;
+}
+
+.field span {
+	font-size: 11px;
+}
+
+.field input,
+.field textarea,
+.field select {
+	font-size: 14px;
+}
+
+.check {
+	font-size: 13px;
+}
+
+.form-error {
+	font-size: 13px;
+}
+
+.badge {
+	font-size: 10px;
+}
+
+/* --------------------------------
+   LEDGER PAGES (transactions, adjustments, audit logs)
+-------------------------------- */
+
+.cell-stack strong,
+.qty {
+	font-size: 14px;
+}
+
+.cell-stack small {
+	font-size: 12px;
+}
+
+.pill {
+	font-size: 10px;
+}
+
+.field-hint {
+	font-size: 12px;
+}
+
+.toolbar .date-field,
+.toolbar .link-btn {
+	font-size: 10px;
+}
+
+.detail-grid {
+	font-size: 14px;
+}
+
+.detail-grid dt {
+	font-size: 10px;
+}
+
+.detail-json {
+	font-size: 12px;
+}
+
+/* --------------------------------
+   USERS & ROLES
+-------------------------------- */
+
+.tab {
+	font-size: 12px;
+}
+
+.page-alert {
+	font-size: 13px;
+}
+
+.data-table .role-select {
+	font-size: 13px;
+}
+
+.role-card-heading p,
+.role-card-footer {
+	font-size: 13px;
+}
+
+.role-card textarea {
+	font-size: 14px;
+}
+
+/* --------------------------------
+   AUTH
+-------------------------------- */
+
+.auth-field > span {
+	font-size: 11px;
+}
+
+.auth-field input,
+.auth-subtitle {
+	font-size: 14px;
+}
+
+.auth-hint {
+	font-size: 12px;
+}
+
+.auth-error,
+.auth-success,
+.auth-row,
+.auth-footer {
+	font-size: 13px;
+}
+
+.auth-aside-copy p {
+	font-size: 15px;
+}
+
+/* --------------------------------
+   LANDING PAGE FIXES
+-------------------------------- */
+
+/* index.css sets `h1, h2 { color: var(--ink) }`, which beats the color
+   inherited from .section-intro, so this heading was ink-on-ink (invisible). */
+.section-intro h2 {
+	color: var(--paper);
+}
+
+/* The "Why WARE67" strip was the only full-bleed section on the page, so on
+   wide screens it stretched edge to edge while everything else sat in the
+   centered container. Keep it aligned with the rest. */
+.landing-strip {
+	max-width: 1600px;
+	margin-inline: auto;
+	border-inline: 1px solid var(--line);
+}

@@ -14,6 +14,12 @@ import UsersPage from './pages/UsersPage.jsx'
 import CategoriesPage from './pages/CategoriesPage.jsx'
 import SuppliersPage from './pages/SuppliersPage.jsx'
 import LocationsPage from './pages/LocationsPage.jsx'
+import TransactionsPage from './pages/TransactionsPage.jsx'
+import AdjustmentsPage from './pages/AdjustmentsPage.jsx'
+import AuditLogsPage from './pages/AuditLogsPage.jsx'
+import './readability.css'
+
+const protect = (page) => <ProtectedRoute>{page}</ProtectedRoute>
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -24,54 +30,15 @@ createRoot(document.getElementById('root')).render(
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/" element={<LandingPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products"
-            element={
-              <ProtectedRoute>
-                <ProductsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
-                <UsersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/categories"
-            element={
-              <ProtectedRoute>
-                <CategoriesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/suppliers"
-            element={
-              <ProtectedRoute>
-                <SuppliersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/locations"
-            element={
-              <ProtectedRoute>
-                <LocationsPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/dashboard" element={protect(<DashboardPage />)} />
+          <Route path="/products" element={protect(<ProductsPage />)} />
+          <Route path="/users" element={protect(<UsersPage />)} />
+          <Route path="/categories" element={protect(<CategoriesPage />)} />
+          <Route path="/suppliers" element={protect(<SuppliersPage />)} />
+          <Route path="/locations" element={protect(<LocationsPage />)} />
+          <Route path="/transactions" element={protect(<TransactionsPage />)} />
+          <Route path="/adjustments" element={protect(<AdjustmentsPage />)} />
+          <Route path="/audit-logs" element={protect(<AuditLogsPage />)} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

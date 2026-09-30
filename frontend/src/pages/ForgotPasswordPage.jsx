@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { forgotPassword } from "../api/auth"
-import "./styles/Auth.css"
+import AuthShell from "../components/AuthShell"
 
 export default function ForgotPasswordPage() {
     const navigate = useNavigate()
@@ -49,77 +49,77 @@ export default function ForgotPasswordPage() {
     }
 
     return (
-        <div className="auth-page">
-            <div className="auth-card">
-                <h1>Forgot password</h1>
-                <p className="auth-subtitle">
-                    Confirm your email and full name, then set a new password.
-                </p>
+        <AuthShell
+            eyebrow="WARE67 / ACCOUNT RECOVERY"
+            title="Forgot password"
+            subtitle="Confirm your email and full name, then set a new password."
+            footer={<Link to="/login">← Back to sign in</Link>}
+        >
+            {done ? (
+                <div className="auth-success" role="status">
+                    Your password has been changed. Redirecting you to sign in…
+                </div>
+            ) : (
+                <form onSubmit={handleSubmit}>
+                    {error && (
+                        <div className="auth-error" role="alert">
+                            {error}
+                        </div>
+                    )}
 
-                {done ? (
-                    <div className="auth-success">
-                        Your password has been changed. Redirecting you to sign in…
-                    </div>
-                ) : (
-                    <form onSubmit={handleSubmit}>
-                        {error && <div className="auth-error">{error}</div>}
+                    <label className="auth-field">
+                        <span>Email</span>
+                        <input
+                            type="email"
+                            value={form.email}
+                            onChange={update("email")}
+                            required
+                            autoComplete="email"
+                        />
+                    </label>
 
-                        <label className="auth-field">
-                            <span>Email</span>
-                            <input
-                                type="email"
-                                value={form.email}
-                                onChange={update("email")}
-                                required
-                                autoComplete="email"
-                            />
-                        </label>
+                    <label className="auth-field">
+                        <span>Full name on the account</span>
+                        <input
+                            type="text"
+                            value={form.name}
+                            onChange={update("name")}
+                            required
+                            autoComplete="name"
+                        />
+                    </label>
 
-                        <label className="auth-field">
-                            <span>Full name on the account</span>
-                            <input
-                                type="text"
-                                value={form.name}
-                                onChange={update("name")}
-                                required
-                                autoComplete="name"
-                            />
-                        </label>
+                    <label className="auth-field">
+                        <span>New password</span>
+                        <input
+                            type="password"
+                            value={form.newPassword}
+                            onChange={update("newPassword")}
+                            required
+                            minLength={8}
+                            autoComplete="new-password"
+                        />
+                        <small className="auth-hint">At least 8 characters.</small>
+                    </label>
 
-                        <label className="auth-field">
-                            <span>New password</span>
-                            <input
-                                type="password"
-                                value={form.newPassword}
-                                onChange={update("newPassword")}
-                                required
-                                minLength={8}
-                                autoComplete="new-password"
-                            />
-                        </label>
+                    <label className="auth-field">
+                        <span>Confirm new password</span>
+                        <input
+                            type="password"
+                            value={form.confirmPassword}
+                            onChange={update("confirmPassword")}
+                            required
+                            minLength={8}
+                            autoComplete="new-password"
+                        />
+                    </label>
 
-                        <label className="auth-field">
-                            <span>Confirm new password</span>
-                            <input
-                                type="password"
-                                value={form.confirmPassword}
-                                onChange={update("confirmPassword")}
-                                required
-                                minLength={8}
-                                autoComplete="new-password"
-                            />
-                        </label>
-
-                        <button type="submit" className="auth-submit" disabled={submitting}>
-                            {submitting ? "Changing password…" : "Change password"}
-                        </button>
-                    </form>
-                )}
-
-                <p className="auth-footer">
-                    <Link to="/login">Back to sign in</Link>
-                </p>
-            </div>
-        </div>
+                    <button type="submit" className="auth-submit" disabled={submitting}>
+                        {submitting ? "Changing password…" : "Change password"}
+                        <span>→</span>
+                    </button>
+                </form>
+            )}
+        </AuthShell>
     )
 }

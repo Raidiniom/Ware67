@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { register } from "../api/auth"
-import "./styles/Auth.css"
+import AuthShell from "../components/AuthShell"
 
 export default function RegisterPage() {
     const navigate = useNavigate()
@@ -39,12 +39,22 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="auth-page">
-            <form className="auth-card" onSubmit={handleSubmit}>
-                <h1>Create your account</h1>
-                <p className="auth-subtitle">Get started with WARE67</p>
-
-                {error && <div className="auth-error">{error}</div>}
+        <AuthShell
+            eyebrow="WARE67 / GET STARTED"
+            title="Create your account"
+            subtitle="Set up access to your team's warehouse operations."
+            footer={
+                <>
+                    Already have an account? <Link to="/login">Sign in</Link>
+                </>
+            }
+        >
+            <form onSubmit={handleSubmit}>
+                {error && (
+                    <div className="auth-error" role="alert">
+                        {error}
+                    </div>
+                )}
 
                 <label className="auth-field">
                     <span>Full name</span>
@@ -66,6 +76,7 @@ export default function RegisterPage() {
                         minLength={8}
                         autoComplete="new-password"
                     />
+                    <small className="auth-hint">At least 8 characters.</small>
                 </label>
 
                 <label className="auth-field">
@@ -82,12 +93,9 @@ export default function RegisterPage() {
 
                 <button type="submit" className="auth-submit" disabled={submitting}>
                     {submitting ? "Creating account…" : "Create account"}
+                    <span>→</span>
                 </button>
-
-                <p className="auth-footer">
-                    Already have an account? <Link to="/login">Sign in</Link>
-                </p>
             </form>
-        </div>
+        </AuthShell>
     )
 }

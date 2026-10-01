@@ -2,8 +2,6 @@ import { Link } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import "./styles/Landing.css"
 
-const apiBaseUrl =
-	import.meta.env.VITE_API_BASE_URL || "https://ware67-api.dcism.org"
 
 export default function LandingPage() {
 	const { user } = useAuth()
@@ -17,7 +15,7 @@ export default function LandingPage() {
 
 				<div className="landing-nav-links">
 					<a href="#about">About</a>
-					<a href="#api">API</a>
+					<Link to="/api-docs">API</Link>
 
 					{user ? (
 						<Link className="nav-action" to="/dashboard">
@@ -185,14 +183,9 @@ export default function LandingPage() {
 					<div className="api-card-footer">
 						<span>API ENDPOINT</span>
 
-						<a
-							href={`${apiBaseUrl}/docs`}
-							target="_blank"
-							rel="noreferrer"
-							className="api-link"
-						>
+						<Link to="/api-docs" className="api-link">
 							Open interactive docs <span>↗</span>
-						</a>
+						</Link>
 					</div>
 				</div>
 			</section>

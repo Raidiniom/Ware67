@@ -7,3 +7,4 @@ from app.models.product import Product
 from app.models.transaction import Transaction
 from app.models.inventory_adjustment import InventoryAdjustment
 from app.models.audit_log import AuditLog
+from app.models.api_key import ApiKey

@@ -265,3 +265,61 @@ Then every other request can just use `Authorization: Bearer {{access_token}}` w
 - API base URL is set via `VITE_API_BASE_URL` in the frontend's `.env` — locally this points at your tunneled/local backend; in production (`frontend/.env.production`) it should be `https://ware67-api.dcism.org`.
 - `frontend/src/api/client.js` already attaches the JWT from `localStorage` (`ware67_token`) to every request via an axios interceptor — after login, store the `access_token` there.
 - CORS: the backend's `main.py` has an explicit `allow_origins` list in `CORSMiddleware` — if you add a new frontend origin (e.g. a preview deploy URL), it must be added there or requests will be silently blocked by the browser.
+
+---
+
+## 9. Partner API Keys
+
+WARE67 supports separate credentials for partner projects. Partner keys do not
+replace user JWTs and cannot access the normal user-management endpoints.
+
+### Database setup
+
+Apply the additive migration once to an existing database:
+
+```bash
+mysql -h 127.0.0.1 -P 3307 -u YOUR_DB_USER -p YOUR_DB_NAME \
+  < schema/add_api_keys.sql
+```
+
+Do not rerun the full `ware67_schema.sql` file on a populated database because
+that file intentionally drops and recreates tables.
+
+### Administrator workflow
+
+An authenticated `ADMIN` can manage keys through:
+
+- `POST /api/v1/api-keys` — create a key
+- `GET /api/v1/api-keys` — list key metadata
+- `DELETE /api/v1/api-keys/{id}` — revoke a key
+
+The raw `api_key` value is returned only by the create request. Store it in the
+partner project's environment variables immediately; WARE67 stores only its
+HMAC-SHA256 digest and cannot display the raw value again.
+
+Example create body:
+
+```json
+{
+  "name": "Partner Project Name",
+  "scopes": ["products:read"],
+  "expires_at": "2027-01-01T00:00:00Z"
+}
+```
+
+### Partner workflow
+
+Partners send the key in the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: YOUR_API_KEY" \
+  "https://ware67-api.dcism.org/api/v1/integration/products"
+```
+
+Available read-only partner routes:
+
+- `GET /api/v1/integration/products`
+- `GET /api/v1/integration/products/{product_id}`
+
+Never commit partner keys to a repository or place them in frontend JavaScript.
+API keys belong in a server-side environment variable or secrets manager.

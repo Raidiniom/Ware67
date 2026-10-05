@@ -18,4 +18,4 @@ CREATE TABLE IF NOT EXISTS api_keys (
     CONSTRAINT fk_api_keys_created_by
         FOREIGN KEY (created_by) REFERENCES users (id)
         ON UPDATE CASCADE ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

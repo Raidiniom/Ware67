@@ -11,3 +11,4 @@ from app.models.product import Product  # noqa: F401
 from app.models.transaction import Transaction  # noqa: F401
 from app.models.inventory_adjustment import InventoryAdjustment  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.api_key import ApiKey  # noqa: F401

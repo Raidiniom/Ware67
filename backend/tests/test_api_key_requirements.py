@@ -2,6 +2,7 @@ import unittest
 
 from app.api.v1.endpoints.api_keys import router as management_router
 from app.api.v1.endpoints.integration import router as integration_router
+from app.schemas.api_key import ApiKeyCreate
 from app.services.api_keys import (
     extract_key_prefix,
     generate_api_key,
@@ -33,6 +34,45 @@ class ApiKeyRequirementsTests(unittest.TestCase):
         self.assertIn("/api-keys/{api_key_id}", management_paths)
         self.assertIn("/integration/products", integration_paths)
         self.assertIn("/integration/products/{product_id}", integration_paths)
+        self.assertIn("/integration/categories", integration_paths)
+        self.assertIn("/integration/suppliers", integration_paths)
+        self.assertIn("/integration/locations", integration_paths)
+
+        product_routes = [
+            route for route in integration_router.routes
+            if route.path in {"/integration/products", "/integration/products/{product_id}"}
+        ]
+        methods = {method for route in product_routes for method in route.methods}
+        self.assertTrue({"GET", "POST", "PATCH", "DELETE"}.issubset(methods))
+
+    def test_product_write_scopes_are_supported(self):
+        payload = ApiKeyCreate(
+            name="Full product integration",
+            scopes=[
+                "products:read",
+                "products:create",
+                "products:update",
+                "products:delete",
+            ],
+        )
+
+        self.assertEqual(
+            payload.scopes,
+            [
+                "products:read",
+                "products:create",
+                "products:update",
+                "products:delete",
+            ],
+        )
+
+    def test_duplicate_scopes_are_removed(self):
+        payload = ApiKeyCreate(
+            name="Read integration",
+            scopes=["products:read", "products:read"],
+        )
+
+        self.assertEqual(payload.scopes, ["products:read"])
 
 
 if __name__ == "__main__":

@@ -3,7 +3,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-ApiKeyScope = Literal["products:read"]
+ApiKeyScope = Literal[
+    "products:read",
+    "products:create",
+    "products:update",
+    "products:delete",
+]
 
 
 class ApiKeyCreate(BaseModel):

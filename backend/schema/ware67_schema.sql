@@ -9,6 +9,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- Drop tables in reverse dependency order (safe re-run)
 DROP TABLE IF EXISTS inventory_adjustments;
 DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS api_keys;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS locations;
 DROP TABLE IF EXISTS suppliers;
@@ -77,6 +78,31 @@ CREATE TABLE audit_logs (
     CONSTRAINT fk_audit_logs_user
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
+-- API_KEYS
+-- Raw keys are shown once and never stored; key_hash is an HMAC-SHA256 digest.
+-- =====================================================================
+CREATE TABLE api_keys (
+    id           CHAR(36)     NOT NULL DEFAULT (UUID()),
+    name         VARCHAR(150) NOT NULL,
+    key_prefix   VARCHAR(32)  NOT NULL,
+    key_hash     CHAR(64)     NOT NULL,
+    scopes       JSON         NOT NULL,
+    is_active    BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_by   CHAR(36)     NOT NULL,
+    expires_at   DATETIME     NULL,
+    last_used_at DATETIME     NULL,
+    revoked_at   DATETIME     NULL,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_api_keys_prefix (key_prefix),
+    UNIQUE KEY uq_api_keys_hash (key_hash),
+    KEY idx_api_keys_created_by (created_by),
+    CONSTRAINT fk_api_keys_created_by
+        FOREIGN KEY (created_by) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================

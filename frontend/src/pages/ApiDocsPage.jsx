@@ -21,9 +21,15 @@ function buildUrl(ep, params, query) {
     return `${API_BASE}${path}${qs.toString() ? `?${qs}` : ""}`
 }
 
-function toCurl(ep, url, token, body) {
+function authHeaders(ep, creds) {
+    if (ep.auth === "bearer" && creds.token) return { Authorization: `Bearer ${creds.token}` }
+    if (ep.auth === "apiKey" && creds.apiKey) return { "X-API-Key": creds.apiKey }
+    return {}
+}
+
+function toCurl(ep, url, creds, body) {
     const lines = [`curl -X ${ep.method} '${url}'`]
-    if (token && ep.access !== "Public") lines.push(`  -H 'Authorization: Bearer ${token}'`)
+    for (const [name, value] of Object.entries(authHeaders(ep, creds))) lines.push(`  -H '${name}: ${value}'`)
     if (body) {
         lines.push(`  -H 'Content-Type: application/json'`)
         lines.push(`  -d '${body.replace(/\s*\n\s*/g, " ")}'`)
@@ -37,7 +43,7 @@ function statusClass(code) {
     return "docs-status docs-status--ok"
 }
 
-function Try({ ep, token, onToken }) {
+function Try({ ep, creds, onToken, onApiKey }) {
     const params = pathParams(ep.path)
     const [pv, setPv] = useState({})
     const [qv, setQv] = useState({})
@@ -67,7 +73,7 @@ function Try({ ep, token, onToken }) {
                 method: ep.method,
                 url,
                 data,
-                headers: token && ep.access !== "Public" ? { Authorization: `Bearer ${token}` } : {},
+                headers: authHeaders(ep, creds),
                 validateStatus: () => true,
             })
             setRes({
@@ -78,6 +84,9 @@ function Try({ ep, token, onToken }) {
             if (ep.path === "/auth/login" && r.status === 200 && r.data?.access_token) {
                 onToken(r.data.access_token)
             }
+            if (ep.path === "/api-keys" && ep.method === "POST" && r.status === 201 && r.data?.api_key) {
+                onApiKey(r.data.api_key)
+            }
         } catch {
             setRes({ clientError: "Couldn't reach the server. Check your connection, or that the backend is running and CORS allows this origin." })
         } finally {
@@ -87,7 +96,7 @@ function Try({ ep, token, onToken }) {
 
     async function copy() {
         try {
-            await navigator.clipboard.writeText(toCurl(ep, url, token, ep.body ? body : ""))
+            await navigator.clipboard.writeText(toCurl(ep, url, creds, ep.body ? body : ""))
             setCopied(true)
             setTimeout(() => setCopied(false), 1500)
         } catch {
@@ -136,7 +145,8 @@ function Try({ ep, token, onToken }) {
                 </button>
             </div>
             {missing.length > 0 && <p className="docs-hint">Fill in {missing.join(", ")} to send.</p>}
-            {ep.access !== "Public" && !token && <p className="docs-hint">No token set. This request will likely return 401.</p>}
+            {ep.auth === "bearer" && !creds.token && <p className="docs-hint">No token set. This request will likely return 401.</p>}
+            {ep.auth === "apiKey" && !creds.apiKey && <p className="docs-hint">No API key set. Paste a partner key above, or this request will return 401.</p>}
 
             {res?.clientError && <div className="docs-alert" role="alert">{res.clientError}</div>}
             {res && !res.clientError && (
@@ -157,6 +167,8 @@ export default function ApiDocsPage() {
     const [selectedId, setSelectedId] = useState(ALL[0].id)
     const [filter, setFilter] = useState("")
     const [token, setToken] = useState(() => localStorage.getItem("ware67_token") || "")
+    // Kept in memory only: partner keys are secrets and should not outlive the tab.
+    const [apiKey, setApiKey] = useState("")
 
     const selected = ALL.find((e) => e.id === selectedId)
 
@@ -208,7 +220,25 @@ export default function ApiDocsPage() {
                         Clear
                     </button>
                 </div>
-                <p className="docs-hint">Access tokens expire after a short time. A 401 means it is time to log in again.</p>
+                <div className="docs-auth">
+                    <label>
+                        <span>Partner API key</span>
+                        <input
+                            type="password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value.trim())}
+                            placeholder="Sent as X-API-Key on the Partner integration endpoints"
+                            autoComplete="off"
+                        />
+                    </label>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setApiKey("")} disabled={!apiKey}>
+                        Clear
+                    </button>
+                </div>
+                <p className="docs-hint">
+                    Access tokens expire after a short time. A 401 means it is time to log in again. Partner keys are
+                    issued by an admin via <code>POST /api-keys</code> and are never stored by this page.
+                </p>
             </section>
 
             <div className="docs-layout">
@@ -247,7 +277,7 @@ export default function ApiDocsPage() {
                         {selected.group}. Access: <strong>{selected.access}</strong>
                     </p>
                     {selected.notes && <p className="docs-note">{selected.notes}</p>}
-                    <Try key={selected.id} ep={selected} token={token} onToken={setToken} />
+                    <Try key={selected.id} ep={selected} creds={{ token, apiKey }} onToken={setToken} onApiKey={setApiKey} />
                 </main>
             </div>
         </div>

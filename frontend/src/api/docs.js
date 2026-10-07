@@ -11,6 +11,7 @@ const ANY = "Any signed-in user"
 const WRITE = "Admin or manager"
 const ADMIN = "Admin only"
 const PUBLIC = "Public"
+const PARTNER = "Partner API key (products:read scope)"
 
 function ep(method, path, summary, o = {}) {
     return {
@@ -19,6 +20,8 @@ function ep(method, path, summary, o = {}) {
         path,
         summary,
         access: o.access ?? ANY,
+        // "bearer" sends the user's access token, "apiKey" sends X-API-Key, "none" sends neither
+        auth: o.auth ?? (o.access === PUBLIC ? "none" : "bearer"),
         query: o.query ?? [],
         body: o.body ?? null,
         notes: o.notes ?? null,
@@ -251,6 +254,36 @@ export const GROUPS = [
                 ],
             }),
             ep("GET", "/audit-logs/{log_id}", "Get one audit entry", { access: ADMIN }),
+        ],
+    },
+    {
+        name: "API keys",
+        endpoints: [
+            ep("GET", "/api-keys", "List partner API keys (metadata only)", { access: ADMIN }),
+            ep("POST", "/api-keys", "Issue a partner API key", {
+                access: ADMIN,
+                body: { name: "Partner Project Name", scopes: ["products:read"], expires_at: null },
+                notes: "The raw api_key is returned once, only in this response, and fills the API key field above. expires_at is optional and must be in the future.",
+            }),
+            ep("DELETE", "/api-keys/{api_key_id}", "Revoke a partner API key", {
+                access: ADMIN,
+                notes: "Revoking is permanent. Partners using the key get 401 immediately.",
+            }),
+        ],
+    },
+    {
+        name: "Partner integration",
+        endpoints: [
+            ep("GET", "/integration/products", "Read-only product list for partners", {
+                access: PARTNER,
+                auth: "apiKey",
+                query: [{ name: "search" }, { name: "skip", hint: "0" }, { name: "limit", hint: "100 (max 200)" }],
+                notes: "Send the key in the X-API-Key header. User tokens are not accepted here.",
+            }),
+            ep("GET", "/integration/products/{product_id}", "Read one product as a partner", {
+                access: PARTNER,
+                auth: "apiKey",
+            }),
         ],
     },
 ]

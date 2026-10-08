@@ -1,12 +1,13 @@
+import unittest
+
 from app.models.user import UserRole
-from app.schemas.auth import ForgotPasswordRequest
+from app.schemas.auth import RegisterRequest
 
 
-def test_guest_role_is_available():
-    assert UserRole.GUEST.value == "GUEST"
+class AuthRequirementsTests(unittest.TestCase):
+    def test_guest_role_is_available(self):
+        self.assertEqual(UserRole.GUEST.value, "GUEST")
 
-
-def test_forgot_password_accepts_email_and_new_password_only():
-    payload = ForgotPasswordRequest(email="user@example.com", new_password="NewPass123")
-    assert payload.email == "user@example.com"
-    assert payload.new_password == "NewPass123"
+    def test_register_requires_an_eight_character_password(self):
+        with self.assertRaises(ValueError):
+            RegisterRequest(name="Jane", email="jane@example.com", password="short")

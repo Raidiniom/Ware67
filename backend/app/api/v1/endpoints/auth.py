@@ -14,9 +14,7 @@ from app.db.session import get_db
 from app.models.role import Role
 from app.models.user import User, UserRole
 from app.schemas.auth import (
-    ForgotPasswordRequest,
     LoginRequest,
-    MessageResponse,
     OnboardRequest,
     RefreshRequest,
     RegisterRequest,
@@ -26,6 +24,7 @@ from app.schemas.auth import (
     UserRead,
 )
 from app.services.audit import log_audit
+from app.services.user_permissions import ensure_can_change_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -156,30 +155,6 @@ def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
-def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="We couldn't find an active account with that email.",
-        )
-
-    user.password = hash_password(payload.new_password)
-    log_audit(
-        db,
-        user_id=user.id,
-        action="FORGOT_PASSWORD",
-        entity=ENTITY,
-        entity_id=user.id,
-        details={"email": user.email},
-        request=request,
-    )
-    db.commit()
-
-    return MessageResponse(message="Your password has been changed. You can now log in with your new password.")
-
-
 @router.post("/onboard", response_model=UserRead)
 def onboard(
     payload: OnboardRequest,
@@ -197,6 +172,7 @@ def onboard(
         new_role = UserRole(payload.role)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    ensure_can_change_user(current_user, user, role=new_role, is_active=payload.is_active)
 
     user.role = new_role
     user.role_id = _ensure_role_record(db, new_role).id
@@ -231,6 +207,7 @@ def update_role(
         new_role = UserRole(payload.role)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    ensure_can_change_user(current_user, user, role=new_role)
 
     old_role = user.role.value
     user.role = new_role
@@ -261,6 +238,7 @@ def update_status(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    ensure_can_change_user(current_user, user, is_active=payload.is_active)
     user.is_active = payload.is_active
 
     log_audit(

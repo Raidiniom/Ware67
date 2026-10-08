@@ -10,6 +10,7 @@ from app.models.user import User, UserRole
 from app.schemas.auth import UserRead
 from app.schemas.management import RoleRead, RoleUpdate, UserCreate, UserUpdate
 from app.services.audit import log_audit
+from app.services.user_permissions import ensure_can_change_user
 
 router = APIRouter(tags=["user-management"])
 
@@ -92,24 +93,12 @@ def update_managed_user(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # NEW: managers may not touch admin/manager accounts (password, email, active flag, role)
-    if (current_user.role == UserRole.MANAGER
-            and user.id != current_user.id
-            and user.role in (UserRole.ADMIN, UserRole.MANAGER)):
-        raise HTTPException(status_code=403, detail="Managers cannot modify administrator or manager accounts")
-
     changes = payload.model_dump(exclude_unset=True)
-    requested_role = changes.get("role")
-    if requested_role is not None:
-        role = _role_value(requested_role)
-        if current_user.role == UserRole.MANAGER and role in (UserRole.ADMIN, UserRole.MANAGER):
-            raise HTTPException(status_code=403, detail="Managers cannot assign administrative roles")
-        if user.id == current_user.id and role != UserRole.ADMIN:
-            raise HTTPException(status_code=400, detail="You cannot remove your own admin access")
+    requested_role = changes.pop("role", None)
+    role = _role_value(requested_role) if requested_role is not None else None
+    ensure_can_change_user(current_user, user, role=role, is_active=changes.get("is_active"))
+    if role is not None:
         _set_user_role(db, user, role.value)
-        changes.pop("role")
-    if user.id == current_user.id and changes.get("is_active") is False:
-        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
     if "email" in changes:
         changes["email"] = changes["email"].lower()
         existing = db.query(User).filter(User.email == changes["email"], User.id != user.id).first()

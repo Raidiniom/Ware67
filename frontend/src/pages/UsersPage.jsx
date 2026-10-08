@@ -102,6 +102,78 @@ function UserForm({ isAdmin, onSaved, onCancel }) {
     )
 }
 
+function ResetPasswordForm({ user, onSaved, onCancel }) {
+    const [password, setPassword] = useState("")
+    const [confirm, setConfirm] = useState("")
+    const [error, setError] = useState("")
+    const [saving, setSaving] = useState(false)
+
+    async function handleSubmit(e) {
+        e.preventDefault()
+        if (password !== confirm) {
+            setError("Passwords do not match.")
+            return
+        }
+        setError("")
+        setSaving(true)
+        try {
+            await updateManagedUser(user.id, { password })
+            onSaved()
+        } catch (err) {
+            setError(errorMessage(err))
+            setSaving(false)
+        }
+    }
+
+    return (
+        <Modal
+            title={`Reset password for ${user.name}`}
+            onClose={saving ? () => {} : onCancel}
+            footer={
+                <>
+                    <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
+                        Cancel
+                    </button>
+                    <button type="submit" form="reset-password-form" className="btn btn-primary" disabled={saving}>
+                        {saving ? "Saving…" : "Set password"}
+                    </button>
+                </>
+            }
+        >
+            <form id="reset-password-form" className="record-form" onSubmit={handleSubmit}>
+                {error && <div className="form-error">{error}</div>}
+                <p className="muted">
+                    Share this temporary password with {user.email} through a channel you trust.
+                </p>
+                <label className="field field--half">
+                    <span>Temporary password *</span>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        minLength={8}
+                        maxLength={128}
+                        required
+                        autoComplete="new-password"
+                    />
+                </label>
+                <label className="field field--half">
+                    <span>Confirm *</span>
+                    <input
+                        type="password"
+                        value={confirm}
+                        onChange={(e) => setConfirm(e.target.value)}
+                        minLength={8}
+                        maxLength={128}
+                        required
+                        autoComplete="new-password"
+                    />
+                </label>
+            </form>
+        </Modal>
+    )
+}
+
 function RoleCard({ role, editable, onSave }) {
     const [description, setDescription] = useState(role.description || "")
     const [saving, setSaving] = useState(false)
@@ -152,6 +224,7 @@ function UsersManager({ isAdmin, currentUserId }) {
     const [creating, setCreating] = useState(false)
     const [deactivating, setDeactivating] = useState(null)
     const [deactivateBusy, setDeactivateBusy] = useState(false)
+    const [resetting, setResetting] = useState(null)
     const [toast, setToast] = useState("")
 
     const loadData = useCallback(async () => {
@@ -302,6 +375,14 @@ function UsersManager({ isAdmin, currentUserId }) {
                     empty="No users yet."
                     renderActions={(u) => (
                         <div className="row-actions">
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                type="button"
+                                disabled={!isAdmin && PRIVILEGED.includes(u.role)}
+                                onClick={() => setResetting(u)}
+                            >
+                                Reset password
+                            </button>
                             {u.is_active ? (
                                 <button
                                     className="btn btn-danger btn-sm"
@@ -344,6 +425,17 @@ function UsersManager({ isAdmin, currentUserId }) {
                         setCreating(false)
                         setToast("Account created")
                         loadData()
+                    }}
+                />
+            )}
+
+            {resetting && (
+                <ResetPasswordForm
+                    user={resetting}
+                    onCancel={() => setResetting(null)}
+                    onSaved={() => {
+                        setResetting(null)
+                        setToast("Password reset")
                     }}
                 />
             )}

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.product import Product
 from app.models.transaction import Transaction
@@ -15,6 +15,8 @@ from app.services.audit import log_audit
 from app.services.stock import apply_stock_change
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+# Guests (the default for self-registered accounts) may view history but not move stock.
+recorder = require_roles("ADMIN", "MANAGER", "STAFF")
 
 
 def _read(t: Transaction, pname, sku, uname) -> TransactionRead:
@@ -79,7 +81,7 @@ def get_transaction(transaction_id: str, db: Session = Depends(get_db), _: User 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(payload: TransactionCreate, request: Request,
-                       db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+                       db: Session = Depends(get_db), user: User = Depends(recorder)):
     delta = payload.quantity if payload.type == "STOCK_IN" else -payload.quantity
     product, before, after = apply_stock_change(db, payload.product_id, delta)  # locks + validates
 

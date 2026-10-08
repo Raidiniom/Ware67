@@ -68,14 +68,10 @@ export const GROUPS = [
                 body: { refresh_token: "" },
             }),
             ep("GET", "/auth/me", "The signed-in user and their role"),
-            ep("POST", "/auth/forgot-password", "Set a new password from an email address", {
-                access: PUBLIC,
-                body: { email: "jane@example.com", new_password: "newpass123" },
-                notes: "There is no email step on this host, so this changes the password immediately.",
-            }),
             ep("POST", "/auth/onboard", "Set a user's role and active flag", {
                 access: WRITE,
                 body: { user_id: "", role: "STAFF", is_active: true },
+                notes: "Managers can only manage guest and staff accounts and cannot assign MANAGER or ADMIN.",
             }),
             ep("PATCH", "/auth/update-role", "Change a user's role", {
                 access: ADMIN,
@@ -84,6 +80,7 @@ export const GROUPS = [
             ep("PATCH", "/auth/update-status", "Activate or deactivate a user", {
                 access: WRITE,
                 body: { user_id: "", is_active: false },
+                notes: "Managers cannot change administrator or manager accounts. Nobody can deactivate themselves.",
             }),
         ],
     },
@@ -204,6 +201,7 @@ export const GROUPS = [
             }),
             ep("GET", "/transactions/{transaction_id}", "Get one transaction"),
             ep("POST", "/transactions", "Record a stock movement", {
+                access: "Staff, manager or admin",
                 body: {
                     product_id: "",
                     type: "STOCK_IN",

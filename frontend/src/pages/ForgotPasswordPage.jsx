@@ -1,125 +1,26 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { forgotPassword } from "../api/auth"
+import { Link } from "react-router-dom"
 import AuthShell from "../components/AuthShell"
 
+// There is no email/SMS provider on this host, so a user can't prove they own
+// an address. Self-service resets were removed (anyone knowing an email could
+// take over the account); an administrator or manager resets it instead from
+// Users & roles.
 export default function ForgotPasswordPage() {
-    const navigate = useNavigate()
-    const [form, setForm] = useState({ email: "", name: "", newPassword: "", confirmPassword: "" })
-    const [error, setError] = useState("")
-    const [submitting, setSubmitting] = useState(false)
-    const [done, setDone] = useState(false)
-
-    function update(field) {
-        return (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
-    }
-
-    async function handleSubmit(e) {
-        e.preventDefault()
-        setError("")
-
-        if (form.newPassword !== form.confirmPassword) {
-            setError("Passwords do not match.")
-            return
-        }
-        if (form.newPassword.length < 8) {
-            setError("Password must be at least 8 characters.")
-            return
-        }
-
-        setSubmitting(true)
-        try {
-            await forgotPassword({
-                email: form.email,
-                name: form.name,
-                newPassword: form.newPassword,
-            })
-            setDone(true)
-            setTimeout(() => navigate("/login"), 2000)
-        } catch (err) {
-            const detail = err?.response?.data?.detail
-            setError(
-                typeof detail === "string"
-                    ? detail
-                    : "We couldn't verify those account details. Please try again."
-            )
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
     return (
         <AuthShell
             eyebrow="WARE67 / ACCOUNT RECOVERY"
             title="Forgot password"
-            subtitle="Confirm your email and full name, then set a new password."
+            subtitle="Password resets are handled by your team's administrators."
             footer={<Link to="/login">← Back to sign in</Link>}
         >
-            {done ? (
-                <div className="auth-success" role="status">
-                    Your password has been changed. Redirecting you to sign in…
-                </div>
-            ) : (
-                <form onSubmit={handleSubmit}>
-                    {error && (
-                        <div className="auth-error" role="alert">
-                            {error}
-                        </div>
-                    )}
-
-                    <label className="auth-field">
-                        <span>Email</span>
-                        <input
-                            type="email"
-                            value={form.email}
-                            onChange={update("email")}
-                            required
-                            autoComplete="email"
-                        />
-                    </label>
-
-                    <label className="auth-field">
-                        <span>Full name on the account</span>
-                        <input
-                            type="text"
-                            value={form.name}
-                            onChange={update("name")}
-                            required
-                            autoComplete="name"
-                        />
-                    </label>
-
-                    <label className="auth-field">
-                        <span>New password</span>
-                        <input
-                            type="password"
-                            value={form.newPassword}
-                            onChange={update("newPassword")}
-                            required
-                            minLength={8}
-                            autoComplete="new-password"
-                        />
-                        <small className="auth-hint">At least 8 characters.</small>
-                    </label>
-
-                    <label className="auth-field">
-                        <span>Confirm new password</span>
-                        <input
-                            type="password"
-                            value={form.confirmPassword}
-                            onChange={update("confirmPassword")}
-                            required
-                            minLength={8}
-                            autoComplete="new-password"
-                        />
-                    </label>
-
-                    <button type="submit" className="auth-submit" disabled={submitting}>
-                        {submitting ? "Changing password…" : "Change password"}
-                        <span>→</span>
-                    </button>
-                </form>
-            )}
+            <div className="auth-success" role="status">
+                Ask a WARE67 administrator or manager to reset your password. They can set a temporary
+                password for you from <strong>Users &amp; roles</strong>, which you can use to sign in.
+            </div>
+            <p className="auth-hint">
+                Managers can reset staff and guest accounts. Administrator and manager accounts can only be
+                reset by an administrator.
+            </p>
         </AuthShell>
     )
 }

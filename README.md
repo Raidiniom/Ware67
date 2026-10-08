@@ -184,6 +184,13 @@ Run locally:
 uvicorn app.main:app --reload --port 8000
 ```
 
+Run the tests (from `backend/`; the API tests use an in-memory SQLite DB, so no tunnel is needed):
+```bash
+python -m unittest discover -s tests
+```
+
+`JWT_SECRET_KEY` is required — the app refuses to start with an empty one, since an empty key would let anyone forge tokens.
+
 ---
 
 ## 5. Git & Deploy Workflow

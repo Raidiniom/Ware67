@@ -11,7 +11,8 @@ const ANY = "Any signed-in user"
 const WRITE = "Admin or manager"
 const ADMIN = "Admin only"
 const PUBLIC = "Public"
-const PARTNER = "Partner API key (products:read scope)"
+const partner = (scope) => `Partner API key (${scope} scope)`
+const READ_SCOPE = partner("products:read")
 
 function ep(method, path, summary, o = {}) {
     return {
@@ -263,7 +264,7 @@ export const GROUPS = [
             ep("POST", "/api-keys", "Issue a partner API key", {
                 access: ADMIN,
                 body: { name: "Partner Project Name", scopes: ["products:read"], expires_at: null },
-                notes: "The raw api_key is returned once, only in this response, and fills the API key field above. expires_at is optional and must be in the future.",
+                notes: "Scopes are products:read, products:create, products:update and products:delete; grant only what the partner needs. The raw api_key is returned once, only in this response, and fills the API key field above. expires_at is optional and must be in the future.",
             }),
             ep("DELETE", "/api-keys/{api_key_id}", "Revoke a partner API key", {
                 access: ADMIN,
@@ -274,16 +275,55 @@ export const GROUPS = [
     {
         name: "Partner integration",
         endpoints: [
-            ep("GET", "/integration/products", "Read-only product list for partners", {
-                access: PARTNER,
+            ep("GET", "/integration/products", "Product list for partners", {
+                access: READ_SCOPE,
                 auth: "apiKey",
-                query: [{ name: "search" }, { name: "skip", hint: "0" }, { name: "limit", hint: "100 (max 200)" }],
-                notes: "Send the key in the X-API-Key header. User tokens are not accepted here.",
+                query: [
+                    { name: "search" },
+                    { name: "category_id" },
+                    { name: "supplier_id" },
+                    { name: "location_id" },
+                    { name: "low_stock", hint: BOOL },
+                    { name: "skip", hint: "0" },
+                    { name: "limit", hint: "100 (max 200)" },
+                ],
+                notes: "Send the key in the X-API-Key header. User tokens are not accepted on /integration routes.",
             }),
             ep("GET", "/integration/products/{product_id}", "Read one product as a partner", {
-                access: PARTNER,
+                access: READ_SCOPE,
                 auth: "apiKey",
             }),
+            ep("POST", "/integration/products", "Create a product as a partner", {
+                access: partner("products:create"),
+                auth: "apiKey",
+                body: {
+                    sku: "SKU-PARTNER-001",
+                    name: "Partner product",
+                    description: "",
+                    category_id: null,
+                    supplier_id: null,
+                    location_id: null,
+                    unit: "pcs",
+                    price: "9.99",
+                    reorder_level: 5,
+                    initial_stock: 0,
+                },
+                notes: "Audited under the admin who issued the key. initial_stock creates an opening STOCK_IN transaction.",
+            }),
+            ep("PATCH", "/integration/products/{product_id}", "Update a product as a partner (send only changed fields)", {
+                access: partner("products:update"),
+                auth: "apiKey",
+                body: { name: "Renamed partner product", price: "12.50" },
+                notes: "Stock cannot be edited here.",
+            }),
+            ep("DELETE", "/integration/products/{product_id}", "Delete a product as a partner", {
+                access: partner("products:delete"),
+                auth: "apiKey",
+                notes: "Fails with 409 if the product has transaction or adjustment history.",
+            }),
+            ep("GET", "/integration/categories", "Categories, for filling category_id", { access: READ_SCOPE, auth: "apiKey" }),
+            ep("GET", "/integration/suppliers", "Suppliers, for filling supplier_id", { access: READ_SCOPE, auth: "apiKey" }),
+            ep("GET", "/integration/locations", "Locations, for filling location_id", { access: READ_SCOPE, auth: "apiKey" }),
         ],
     },
 ]

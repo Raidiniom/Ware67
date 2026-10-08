@@ -302,7 +302,12 @@ Example create body:
 ```json
 {
   "name": "Partner Project Name",
-  "scopes": ["products:read"],
+  "scopes": [
+    "products:read",
+    "products:create",
+    "products:update",
+    "products:delete"
+  ],
   "expires_at": "2027-01-01T00:00:00Z"
 }
 ```
@@ -316,10 +321,35 @@ curl -H "X-API-Key: YOUR_API_KEY" \
   "https://ware67-api.dcism.org/api/v1/integration/products"
 ```
 
-Available read-only partner routes:
+Available partner routes:
 
 - `GET /api/v1/integration/products`
 - `GET /api/v1/integration/products/{product_id}`
+- `POST /api/v1/integration/products`
+- `PATCH /api/v1/integration/products/{product_id}`
+- `DELETE /api/v1/integration/products/{product_id}`
+- `GET /api/v1/integration/categories`
+- `GET /api/v1/integration/suppliers`
+- `GET /api/v1/integration/locations`
+
+Each operation is independently permissioned. Give a partner only the scopes it
+needs. The three reference-data routes use `products:read`; partners can call
+them to obtain valid category, supplier, and location IDs before creating or
+updating a product.
+
+Example product creation:
+
+```bash
+curl -X POST \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sku":"PARTNER-001","name":"Partner Product","price":25.50,"initial_stock":10}' \
+  "https://ware67-api.dcism.org/api/v1/integration/products"
+```
+
+Product stock cannot be overwritten through an update request. Opening stock is
+accepted only during creation and is recorded as a stock transaction. Existing
+stock changes must continue to use the inventory transaction workflow.
 
 Never commit partner keys to a repository or place them in frontend JavaScript.
 API keys belong in a server-side environment variable or secrets manager.

@@ -18,6 +18,7 @@ import TransactionsPage from './pages/TransactionsPage.jsx'
 import AdjustmentsPage from './pages/AdjustmentsPage.jsx'
 import AuditLogsPage from './pages/AuditLogsPage.jsx'
 import './readability.css'
+import ApiDocsPage from './pages/ApiDocsPage.jsx'
 
 const protect = (page) => <ProtectedRoute>{page}</ProtectedRoute>
 
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/api-docs" element={<ApiDocsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

@@ -280,29 +280,26 @@ Then every other request can just use `Authorization: Bearer {{access_token}}` w
 WARE67 supports separate credentials for partner projects. Partner keys do not
 replace user JWTs and cannot access the normal user-management endpoints.
 
-### Database setup
+> Team members: database setup, migrations, configuration and how keys work
+> internally are in [API_Keys_Team_Notes.md](API_Keys_Team_Notes.md).
 
-Apply the additive migration once to an existing database:
+### Getting a key
 
-```bash
-mysql -h 127.0.0.1 -P 3307 -u YOUR_DB_USER -p YOUR_DB_NAME \
-  < schema/add_api_keys.sql
-```
-
-Do not rerun the full `ware67_schema.sql` file on a populated database because
-that file intentionally drops and recreates tables.
-
-### Administrator workflow
-
-An authenticated `ADMIN` can manage keys through:
+An authenticated `ADMIN` manages keys through:
 
 - `POST /api/v1/api-keys` — create a key
-- `GET /api/v1/api-keys` — list key metadata
+- `GET /api/v1/api-keys?skip=0&limit=50` — list key metadata
 - `DELETE /api/v1/api-keys/{id}` — revoke a key
 
-The raw `api_key` value is returned only by the create request. Store it in the
-partner project's environment variables immediately; WARE67 stores only its
-HMAC-SHA256 digest and cannot display the raw value again.
+The raw `api_key` value is returned **only once**, in the create response.
+Copy it into your project's server-side environment variables right away;
+WARE67 keeps only a one-way hash and can't show it again. If it's lost, revoke
+it and create a new one.
+
+Keys expire after **90 days** by default, which is also the maximum. To expire
+sooner, pass `expires_at` with a timezone (for example `2026-12-31T00:00:00Z`).
+Create a replacement key before the old one expires, switch your project over,
+then revoke the old key.
 
 Example create body:
 
@@ -314,8 +311,7 @@ Example create body:
     "products:create",
     "products:update",
     "products:delete"
-  ],
-  "expires_at": "2027-01-01T00:00:00Z"
+  ]
 }
 ```
 
@@ -358,5 +354,24 @@ Product stock cannot be overwritten through an update request. Opening stock is
 accepted only during creation and is recorded as a stock transaction. Existing
 stock changes must continue to use the inventory transaction workflow.
 
-Never commit partner keys to a repository or place them in frontend JavaScript.
-API keys belong in a server-side environment variable or secrets manager.
+### Limits and errors
+
+| Status | Meaning |
+| ------ | ------- |
+| `401`  | Key missing, wrong, revoked, or expired (`"API key has expired"`) |
+| `403`  | Key is valid but lacks the scope the route needs |
+| `429`  | Over 120 requests per minute for this key, or too many failed attempts from your IP. Wait for the `Retry-After` header's number of seconds. |
+
+### Keeping your key secret
+
+A partner key can create, change and delete products, so treat it like a
+password:
+
+- Keep it in a server-side environment variable or secrets manager, and call
+  WARE67 from your backend.
+- Never ship it in your app's client-side code (browser JavaScript, mobile app
+  bundles). Anything sent to a user's device can be extracted.
+- Never commit it to a repository. If it leaks, revoke it immediately.
+
+Pasting a key into WARE67's own API reference page to try requests is fine:
+the page keeps it in memory only and forgets it when the tab closes.

@@ -54,10 +54,10 @@ def main() -> None:
         db.commit()
         db.refresh(temporary_key)
 
-        authenticated_key = get_current_api_key(raw_key=raw_key, db=db)
         request = Request(
             {"type": "http", "headers": [], "client": ("127.0.0.1", 0)}
         )
+        authenticated_key = get_current_api_key(request=request, raw_key=raw_key, db=db)
         products = list_partner_products(
             search=None,
             category_id=None,
@@ -108,7 +108,7 @@ def main() -> None:
         temporary_key.is_active = False
         db.commit()
         try:
-            get_current_api_key(raw_key=raw_key, db=db)
+            get_current_api_key(request=request, raw_key=raw_key, db=db)
         except HTTPException as exc:
             if exc.status_code != 401:
                 raise

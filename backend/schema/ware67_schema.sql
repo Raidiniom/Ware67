@@ -82,7 +82,7 @@ CREATE TABLE audit_logs (
 
 -- =====================================================================
 -- API_KEYS
--- Raw keys are shown once and never stored; key_hash is an HMAC-SHA256 digest.
+-- Raw keys are shown once and never stored; key_hash is a SHA-256 digest.
 -- =====================================================================
 CREATE TABLE api_keys (
     id           CHAR(36)     NOT NULL DEFAULT (UUID()),

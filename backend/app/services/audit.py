@@ -1,13 +1,24 @@
 from fastapi import Request
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.models.audit_log import AuditLog
 
 
 def client_ip(request: Request) -> str | None:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()[:45]
-    return request.client.host if request.client else None
+    """The caller's IP. X-Forwarded-For is client-controlled, so it is only
+    read when the direct peer is one of settings.TRUSTED_PROXIES."""
+    peer = request.client.host if request.client else None
+    trusted = settings.trusted_proxies
+    if peer is None or peer not in trusted:
+        return peer[:45] if peer else None
+
+    # Walk the chain from the nearest hop back; the first address that isn't
+    # one of our proxies is the real client. Anything left of it is spoofable.
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    for hop in reversed(hops):
+        if hop not in trusted:
+            return hop[:45]
+    return peer[:45]
 
 
 def log_action(db: Session, *, user_id=None, action, entity, entity_id=None,

@@ -170,6 +170,10 @@ keeping keys inside their company is covered in `tests/test_company_isolation.py
 | Revoke | own company's keys | any key |
 | Keys expiring soon | | ✅ `GET /platform/api-keys/expiring?days=14` |
 
+In the app: companies use the **API Keys** page (`/api-keys`); the platform
+team uses the **Platform Console** (`/platform`), which has the review queue,
+all keys, keys expiring soon, and companies.
+
 Other company roles (manager, staff, guest) can't touch keys at all. The
 platform team is accounts with `is_platform_admin`, created with
 `backend/scripts/create_platform_admin.py`.
@@ -201,8 +205,6 @@ PENDING --approve--> APPROVED --reveal--> ACTIVE --(90 days)--> EXPIRED
 
 ## Known gaps (planned)
 
-- No frontend pages yet for requesting, reviewing or revealing keys; for now
-  use the in-app API reference (PR C adds the pages).
 - Nobody is notified automatically: the platform team checks the pending queue
   and the expiring list themselves.
 - There's no rotate endpoint; request a new key, switch over, revoke the old one.

@@ -17,6 +17,8 @@ import LocationsPage from './pages/LocationsPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
 import AdjustmentsPage from './pages/AdjustmentsPage.jsx'
 import AuditLogsPage from './pages/AuditLogsPage.jsx'
+import ApiKeysPage from './pages/ApiKeysPage.jsx'
+import PlatformPage from './pages/PlatformPage.jsx'
 import './readability.css'
 import ApiDocsPage from './pages/ApiDocsPage.jsx'
 
@@ -41,6 +43,8 @@ createRoot(document.getElementById('root')).render(
           <Route path="/transactions" element={protect(<TransactionsPage />)} />
           <Route path="/adjustments" element={protect(<AdjustmentsPage />)} />
           <Route path="/audit-logs" element={protect(<AuditLogsPage />)} />
+          <Route path="/api-keys" element={protect(<ApiKeysPage />)} />
+          <Route path="/platform" element={protect(<PlatformPage />)} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

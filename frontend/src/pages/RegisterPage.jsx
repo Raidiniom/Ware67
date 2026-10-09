@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { register } from "../api/auth"
+import { errorMessage } from "../api/resources"
 import AuthShell from "../components/AuthShell"
 
 export default function RegisterPage() {
@@ -36,8 +37,8 @@ export default function RegisterPage() {
             })
             navigate("/login", { state: { registered: true } })
         } catch (err) {
-            const detail = err?.response?.data?.detail
-            setError(typeof detail === "string" ? detail : "Unable to create your account. Please try again.")
+            // Shows validation details too (e.g. an invalid email), not just plain messages.
+            setError(errorMessage(err, "Unable to create your account. Please try again."))
         } finally {
             setSubmitting(false)
         }

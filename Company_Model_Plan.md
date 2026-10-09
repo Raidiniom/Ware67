@@ -98,6 +98,8 @@ Status: built on `feat/api-key-requests`.
 
 ### PR C (Phase 3): Frontend pages
 
+Status: built on `feat/api-key-pages`.
+
 Platform console (companies, key request queue, expiring keys) and the company
 API keys page (request, reveal-once dialog, revoke).
 

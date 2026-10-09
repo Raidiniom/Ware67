@@ -305,7 +305,8 @@ replace user JWTs and cannot access the normal user-management endpoints.
 ### Getting a key
 
 A key belongs to one company and can only read and change that company's
-data. Getting one takes three steps:
+data. In the app, use the **API Keys** page (owners and admins). Through the
+API, getting one takes three steps:
 
 1. **Request** (your company's `OWNER` or `ADMIN`):
    `POST /api/v1/company/api-keys`

@@ -1,0 +1,60 @@
+/* Scope checkboxes for requesting and approving API keys. Kept apart from
+   .field, whose input/span rules are meant for text boxes and labels. */
+.scope-picker {
+	grid-column: 1 / -1;
+	display: grid;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.scope-picker legend {
+	margin-bottom: 7px;
+	padding: 0;
+	color: var(--dashboard-ink);
+	font: 800 9px Arial, sans-serif;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.scope-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--dashboard-line);
+	cursor: pointer;
+}
+
+.scope-option input {
+	margin-top: 2px;
+	accent-color: var(--dashboard-green);
+}
+
+.scope-option strong {
+	display: block;
+	font-size: 14px;
+}
+
+.scope-option small {
+	display: block;
+	margin-top: 2px;
+	color: var(--dashboard-muted);
+}
+
+/* The one-time key display. */
+.revealed-key {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin: 16px 0;
+}
+
+.revealed-key input {
+	flex: 1 1 280px;
+	min-width: 0;
+	padding: 10px 12px;
+	border: 1px solid var(--dashboard-line);
+	font: 13px ui-monospace, Consolas, monospace;
+}

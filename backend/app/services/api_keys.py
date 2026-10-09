@@ -2,21 +2,19 @@ import hashlib
 import hmac
 import secrets
 
-from app.core.config import settings
-
 API_KEY_PREFIX = "ware67"
+# Hex characters in the public part of the key (48 bits), used to look the key up.
+PUBLIC_ID_LENGTH = 12
 
 
 def hash_api_key(raw_key: str) -> str:
-    return hmac.new(
-        settings.JWT_SECRET_KEY.encode("utf-8"),
-        raw_key.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    # The secret part is 256 random bits, so a plain SHA-256 can't be brute
+    # forced and doesn't tie key validity to any server secret.
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 def generate_api_key() -> tuple[str, str, str]:
-    public_id = secrets.token_hex(4)
+    public_id = secrets.token_hex(PUBLIC_ID_LENGTH // 2)
     key_prefix = f"{API_KEY_PREFIX}_{public_id}"
     raw_key = f"{key_prefix}_{secrets.token_urlsafe(32)}"
     return raw_key, key_prefix, hash_api_key(raw_key)
@@ -24,7 +22,7 @@ def generate_api_key() -> tuple[str, str, str]:
 
 def extract_key_prefix(raw_key: str) -> str | None:
     parts = raw_key.split("_", 2)
-    if len(parts) != 3 or parts[0] != API_KEY_PREFIX or len(parts[1]) != 8:
+    if len(parts) != 3 or parts[0] != API_KEY_PREFIX or len(parts[1]) != PUBLIC_ID_LENGTH:
         return None
     return "_".join(parts[:2])
 

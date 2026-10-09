@@ -29,6 +29,15 @@ class ApiKeyCreate(BaseModel):
     def deduplicate_scopes(cls, value: list[ApiKeyScope]) -> list[ApiKeyScope]:
         return list(dict.fromkeys(value))
 
+    # A bare "2026-12-31T00:00:00" is ambiguous (whose midnight?), so require
+    # an explicit offset instead of silently assuming UTC.
+    @field_validator("expires_at")
+    @classmethod
+    def expires_at_needs_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("must include a timezone, e.g. 2026-12-31T00:00:00Z")
+        return value
+
 
 class ApiKeyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

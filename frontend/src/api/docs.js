@@ -258,15 +258,15 @@ export const GROUPS = [
     {
         name: "API keys",
         endpoints: [
-            ep("GET", "/api-keys", "List partner API keys (metadata only)", { access: ADMIN }),
+            ep("GET", "/api-keys", "List partner API keys (metadata only)", { access: ADMIN, query: PAGE }),
             ep("POST", "/api-keys", "Issue a partner API key", {
                 access: ADMIN,
                 body: { name: "Partner Project Name", scopes: ["products:read"], expires_at: null },
-                notes: "Scopes are products:read, products:create, products:update and products:delete; grant only what the partner needs. The raw api_key is returned once, only in this response, and fills the API key field above. expires_at is optional and must be in the future.",
+                notes: "Scopes are products:read, products:create, products:update and products:delete; grant only what the partner needs. The raw api_key is returned once, only in this response, and fills the API key field above. Keys last 90 days by default and at most 90 days; a custom expires_at must include a timezone (e.g. 2026-12-31T00:00:00Z).",
             }),
             ep("DELETE", "/api-keys/{api_key_id}", "Revoke a partner API key", {
                 access: ADMIN,
-                notes: "Revoking is permanent. Partners using the key get 401 immediately.",
+                notes: "Revoking is permanent. Partners using the key get 401 immediately. Revoking a key that is already revoked returns 409.",
             }),
         ],
     },
@@ -285,7 +285,7 @@ export const GROUPS = [
                     { name: "skip", hint: "0" },
                     { name: "limit", hint: "100 (max 200)" },
                 ],
-                notes: "Send the key in the X-API-Key header. User tokens are not accepted on /integration routes.",
+                notes: "Send the key in the X-API-Key header. User tokens are not accepted on /integration routes. Each key may make 120 requests per minute; past that you get 429 with a Retry-After header.",
             }),
             ep("GET", "/integration/products/{product_id}", "Read one product as a partner", {
                 access: READ_SCOPE,

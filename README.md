@@ -109,23 +109,25 @@ The application registers its shared exception handlers in
    from fastapi import APIRouter, Depends, HTTPException
    from sqlalchemy.orm import Session
    from app.db.session import get_db
-   from app.api.deps import get_current_user, require_roles
+   from app.api.deps import get_current_member, require_roles
    from app.models.product import Product
+   from app.models.user import User
    from app.schemas.product import ProductCreate, ProductRead
 
    router = APIRouter(prefix="/products", tags=["products"])
 
    @router.get("", response_model=list[ProductRead])
-   def list_products(db: Session = Depends(get_db), _=Depends(get_current_user)):
-       return db.query(Product).all()
+   def list_products(db: Session = Depends(get_db), user: User = Depends(get_current_member)):
+       # ALWAYS filter by the caller's company, see 3.4
+       return db.query(Product).filter(Product.company_id == user.company_id).all()
 
    @router.post("", response_model=ProductRead, status_code=201)
    def create_product(
        payload: ProductCreate,
        db: Session = Depends(get_db),
-       _=Depends(require_roles("ADMIN", "MANAGER")),
+       user: User = Depends(require_roles("ADMIN", "MANAGER")),
    ):
-       product = Product(**payload.model_dump())
+       product = Product(**payload.model_dump(), company_id=user.company_id)
        db.add(product)
        db.commit()
        db.refresh(product)
@@ -138,11 +140,28 @@ The application registers its shared exception handlers in
    api_router.include_router(products.router)
    ```
 
-### 3.4 Protecting routes
+### 3.4 Protecting routes and keeping companies apart
 
-- Any logged-in user: `Depends(get_current_user)`
-- Restricted to specific roles: `Depends(require_roles("ADMIN"))` or `Depends(require_roles("ADMIN", "MANAGER"))`
-- Public (no auth): just don't add either dependency
+Every company only ever sees its own data. A single query without a
+`company_id` filter leaks one company's data to another, so for any route that
+touches company data:
+
+- Depend on `get_current_member` (any member) or `require_roles(...)` (specific
+  roles; `OWNER` is allowed wherever `ADMIN` is). Both reject platform admins and
+  deactivated companies. Don't use `get_current_user` for company data.
+- Filter every query by `user.company_id`, and set `company_id` on every new row.
+- Look rows up by id with `get_owned_or_404` from `app/services/tenancy.py`, so
+  another company's id returns 404.
+- Add the route to `ROUTE_CLASSIFICATION` in `tests/test_company_isolation.py`
+  and add a test where company B tries to reach company A's row. The test
+  suite fails until every route is classified.
+
+Other cases:
+
+- Platform team only (companies, API keys): `Depends(require_platform_admin)`
+- Partner API key routes: `Depends(require_api_key_scope("..."))`, then filter
+  by `api_key.company_id`
+- Public (no auth): just don't add any of these dependencies
 
 ### 3.5 ⚠️ Gotcha: model relationships and circular imports
 
@@ -280,44 +299,40 @@ Then every other request can just use `Authorization: Bearer {{access_token}}` w
 WARE67 supports separate credentials for partner projects. Partner keys do not
 replace user JWTs and cannot access the normal user-management endpoints.
 
-### Database setup
+> Team members: database setup, migrations, configuration and how keys work
+> internally are in [API_Keys_Team_Notes.md](API_Keys_Team_Notes.md).
 
-Apply the additive migration once to an existing database:
+### Getting a key
 
-```bash
-mysql -h 127.0.0.1 -P 3307 -u YOUR_DB_USER -p YOUR_DB_NAME \
-  < schema/add_api_keys.sql
-```
+A key belongs to one company and can only read and change that company's
+data. In the app, use the **API Keys** page (owners and admins). Through the
+API, getting one takes three steps:
 
-Do not rerun the full `ware67_schema.sql` file on a populated database because
-that file intentionally drops and recreates tables.
+1. **Request** (your company's `OWNER` or `ADMIN`):
+   `POST /api/v1/company/api-keys`
+   ```json
+   {
+     "name": "Partner Project Name",
+     "scopes": ["products:read", "products:create"],
+     "purpose": "Sync our online shop's catalogue"
+   }
+   ```
+   Ask only for the scopes the integration needs: `products:read`,
+   `products:create`, `products:update`, `products:delete`.
+2. **Approval** by the WARE67 team. They may grant fewer scopes than requested,
+   or reject the request with a reason. Check the status with
+   `GET /api/v1/company/api-keys`.
+3. **Reveal** within 7 days of approval:
+   `POST /api/v1/company/api-keys/{id}/reveal`. This creates the key and returns
+   it in `api_key` **exactly once**. Copy it into your project's server-side
+   environment variables right away; WARE67 keeps only a one-way hash and
+   nobody, including the WARE67 team, can show it again. If it's lost, revoke it
+   and request a new one.
 
-### Administrator workflow
-
-An authenticated `ADMIN` can manage keys through:
-
-- `POST /api/v1/api-keys` — create a key
-- `GET /api/v1/api-keys` — list key metadata
-- `DELETE /api/v1/api-keys/{id}` — revoke a key
-
-The raw `api_key` value is returned only by the create request. Store it in the
-partner project's environment variables immediately; WARE67 stores only its
-HMAC-SHA256 digest and cannot display the raw value again.
-
-Example create body:
-
-```json
-{
-  "name": "Partner Project Name",
-  "scopes": [
-    "products:read",
-    "products:create",
-    "products:update",
-    "products:delete"
-  ],
-  "expires_at": "2027-01-01T00:00:00Z"
-}
-```
+Keys work for **90 days** from the moment they're revealed. Request a
+replacement before then, switch your project over, then revoke the old key with
+`DELETE /api/v1/company/api-keys/{id}`. You can also use that to revoke a key
+at any time, for example if it leaks.
 
 ### Partner workflow
 
@@ -358,5 +373,24 @@ Product stock cannot be overwritten through an update request. Opening stock is
 accepted only during creation and is recorded as a stock transaction. Existing
 stock changes must continue to use the inventory transaction workflow.
 
-Never commit partner keys to a repository or place them in frontend JavaScript.
-API keys belong in a server-side environment variable or secrets manager.
+### Limits and errors
+
+| Status | Meaning |
+| ------ | ------- |
+| `401`  | Key missing, wrong, revoked, or expired (`"API key has expired"`) |
+| `403`  | Key is valid but lacks the scope the route needs |
+| `429`  | Over 120 requests per minute for this key, or too many failed attempts from your IP. Wait for the `Retry-After` header's number of seconds. |
+
+### Keeping your key secret
+
+A partner key can create, change and delete products, so treat it like a
+password:
+
+- Keep it in a server-side environment variable or secrets manager, and call
+  WARE67 from your backend.
+- Never ship it in your app's client-side code (browser JavaScript, mobile app
+  bundles). Anything sent to a user's device can be extracted.
+- Never commit it to a repository. If it leaks, revoke it immediately.
+
+Pasting a key into WARE67's own API reference page to try requests is fine:
+the page keeps it in memory only and forgets it when the tab closes.

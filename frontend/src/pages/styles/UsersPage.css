@@ -145,6 +145,10 @@
 	font: 800 13px Arial, sans-serif;
 }
 
+.role-mark--owner {
+	background: #111827;
+}
+
 .role-mark--admin {
 	background: var(--dashboard-orange);
 }

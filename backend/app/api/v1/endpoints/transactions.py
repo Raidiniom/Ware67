@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_member, require_roles
 from app.db.session import get_db
+from app.models.api_key import ApiKey
 from app.models.product import Product
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -19,16 +20,19 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 recorder = require_roles("ADMIN", "MANAGER", "STAFF")
 
 
-def _read(t: Transaction, pname, sku, uname) -> TransactionRead:
+def _read(t: Transaction, pname, sku, uname, key_name=None) -> TransactionRead:
     r = TransactionRead.model_validate(t)
-    r.product_name, r.product_sku, r.user_name = pname, sku, uname
+    r.product_name, r.product_sku, r.user_name, r.api_key_name = pname, sku, uname, key_name
     return r
 
 
-def _base_query(db: Session):
-    return (db.query(Transaction, Product.name, Product.sku, User.name)
+def _base_query(db: Session, company_id: str):
+    # Outer joins: a row is made either by a user or by a partner API key.
+    return (db.query(Transaction, Product.name, Product.sku, User.name, ApiKey.name)
             .join(Product, Product.id == Transaction.product_id)
-            .join(User, User.id == Transaction.user_id))
+            .outerjoin(User, User.id == Transaction.user_id)
+            .outerjoin(ApiKey, ApiKey.id == Transaction.api_key_id)
+            .filter(Transaction.company_id == company_id))
 
 
 @router.get("", response_model=TransactionList)
@@ -44,9 +48,9 @@ def list_transactions(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_member),
 ):
-    q = _base_query(db)
+    q = _base_query(db, user.company_id)
     if search:
         like = f"%{search.strip()}%"
         q = q.filter(or_(Product.name.like(like), Product.sku.like(like),
@@ -72,8 +76,9 @@ def list_transactions(
 
 
 @router.get("/{transaction_id}", response_model=TransactionRead)
-def get_transaction(transaction_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    row = _base_query(db).filter(Transaction.id == transaction_id).first()
+def get_transaction(transaction_id: str, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_member)):
+    row = _base_query(db, user.company_id).filter(Transaction.id == transaction_id).first()
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Transaction not found")
     return _read(*row)
@@ -83,9 +88,11 @@ def get_transaction(transaction_id: str, db: Session = Depends(get_db), _: User 
 def create_transaction(payload: TransactionCreate, request: Request,
                        db: Session = Depends(get_db), user: User = Depends(recorder)):
     delta = payload.quantity if payload.type == "STOCK_IN" else -payload.quantity
-    product, before, after = apply_stock_change(db, payload.product_id, delta)  # locks + validates
+    # locks + validates, and only finds this company's products
+    product, before, after = apply_stock_change(db, payload.product_id, delta, user.company_id)
 
     txn = Transaction(
+        company_id=user.company_id,
         product_id=product.id,
         user_id=user.id,                    # from the JWT, never from the request body
         type=payload.type,

@@ -36,4 +36,4 @@ watchfiles==1.2.0
 websockets==17.1
 pymysql
 pydantic[email]
-httpx==0.28.1  # test-only: FastAPI TestClient
+httpx2==2.13.1  # test-only: starlette 1.x TestClient needs httpx2, not httpx

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     auth, management, products, categories,
     suppliers, locations, transactions, adjustments, audit_logs, api_keys, integration,
+    company, platform,
 )
 
 api_router = APIRouter()
@@ -14,5 +15,8 @@ api_router.include_router(locations.router)
 api_router.include_router(transactions.router)
 api_router.include_router(adjustments.router)
 api_router.include_router(audit_logs.router)
-api_router.include_router(api_keys.router)
+api_router.include_router(api_keys.company_router)
+api_router.include_router(api_keys.platform_router)
 api_router.include_router(integration.router)
+api_router.include_router(company.router)
+api_router.include_router(platform.router)

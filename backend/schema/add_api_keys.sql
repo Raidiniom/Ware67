@@ -1,3 +1,5 @@
+-- HISTORICAL: already applied to the shared database. For a new database use
+-- ware67_schema.sql, which includes the api_keys table with company_id.
 -- Add API-key authentication without recreating the existing WARE67 database.
 CREATE TABLE IF NOT EXISTS api_keys (
     id           CHAR(36)     NOT NULL,

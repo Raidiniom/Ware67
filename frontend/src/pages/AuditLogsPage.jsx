@@ -95,7 +95,7 @@ function AuditDetail({ row, onClose }) {
 export default function AuditLogsPage() {
     const { user } = useAuth()
 
-    if (user?.role !== "ADMIN") {
+    if (!["OWNER", "ADMIN"].includes(user?.role)) {
         return (
             <PageShell title="Audit logs" subtitle="Who did what, and when.">
                 <div className="table-wrap">

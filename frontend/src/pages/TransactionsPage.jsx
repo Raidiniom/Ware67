@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext"
 import { formatDateTime } from "../utils/format"
 
 // Guests are read-only; everyone else can record stock movements.
-const CREATE_ROLES = ["ADMIN", "MANAGER", "STAFF"]
+const CREATE_ROLES = ["OWNER", "ADMIN", "MANAGER", "STAFF"]
 
 const columns = [
     { key: "created_at", header: "When", render: (r) => <span className="cell-nowrap">{formatDateTime(r.created_at)}</span> },

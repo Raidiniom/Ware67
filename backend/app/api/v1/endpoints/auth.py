@@ -11,6 +11,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
+from app.models.company import Company
 from app.models.role import Role
 from app.models.user import User, UserRole
 from app.schemas.auth import (
@@ -24,6 +25,7 @@ from app.schemas.auth import (
     UserRead,
 )
 from app.services.audit import log_audit
+from app.services.tenancy import get_owned_or_404
 from app.services.user_permissions import ensure_can_change_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -60,13 +62,18 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
             detail="An account with this email already exists",
         )
 
+    company = Company(name=payload.company_name)
+    db.add(company)
+    db.flush()  # populate company.id
+
     user = User(
-        name=payload.name.strip(),
+        name=payload.name,
         email=payload.email.lower(),
         password=hash_password(payload.password),
-        role=UserRole.GUEST,
+        role=UserRole.OWNER,
+        company_id=company.id,
     )
-    user.role_id = _ensure_role_record(db, UserRole.GUEST).id
+    user.role_id = _ensure_role_record(db, UserRole.OWNER).id
     db.add(user)
     db.flush()  # populate user.id for the audit row
 
@@ -76,7 +83,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         action="REGISTER",
         entity=ENTITY,
         entity_id=user.id,
-        details={"email": user.email, "role": user.role.value},
+        details={"email": user.email, "role": user.role.value, "company_name": company.name},
         request=request,
     )
     db.commit()
@@ -95,6 +102,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             action="LOGIN_FAILED",
             entity=ENTITY,
             entity_id=user.id if user else None,
+            company_id=user.company_id if user else None,
             details={"email": payload.email.lower()},
             request=request,
         )
@@ -108,6 +116,13 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has been deactivated",
         )
+    if user.company_id is not None:
+        company = db.get(Company, user.company_id)
+        if company is None or not company.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your company's account has been deactivated",
+            )
 
     log_audit(
         db,
@@ -162,9 +177,7 @@ def onboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
 ):
-    user = db.query(User).filter(User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = get_owned_or_404(db, User, payload.user_id, current_user.company_id, "User")
 
     old_role = user.role.value
 
@@ -199,9 +212,7 @@ def update_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN")),
 ):
-    user = db.query(User).filter(User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = get_owned_or_404(db, User, payload.user_id, current_user.company_id, "User")
 
     try:
         new_role = UserRole(payload.role)
@@ -234,9 +245,7 @@ def update_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
 ):
-    user = db.query(User).filter(User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = get_owned_or_404(db, User, payload.user_id, current_user.company_id, "User")
 
     ensure_can_change_user(current_user, user, is_active=payload.is_active)
     user.is_active = payload.is_active

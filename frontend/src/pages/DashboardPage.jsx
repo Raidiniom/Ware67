@@ -64,7 +64,7 @@ const ALL_MODULES = [
 		path: "/audit-logs",
 		title: "Audit Logs",
 		description: "Who did what, and when.",
-		roles: ["ADMIN"],
+		roles: ["OWNER", "ADMIN"],
 		icon: "⌁",
 		category: "Administration",
 	},
@@ -73,9 +73,38 @@ const ALL_MODULES = [
 		path: "/users",
 		title: "Users & Roles",
 		description: "Manage accounts and permissions.",
-		roles: ["ADMIN", "MANAGER"],
+		roles: ["OWNER", "ADMIN", "MANAGER"],
 		icon: "♙",
 		category: "Administration",
+	},
+	{
+		key: "api-keys",
+		path: "/api-keys",
+		title: "API Keys",
+		description: "Connect your other systems to your products.",
+		roles: ["OWNER", "ADMIN"],
+		icon: "⚿",
+		category: "Administration",
+	},
+]
+
+// The platform team manages companies and API keys, never a company's inventory.
+const PLATFORM_MODULES = [
+	{
+		key: "platform",
+		path: "/platform",
+		title: "Platform Console",
+		description: "Review API key requests, watch expiring keys and manage companies.",
+		icon: "◎",
+		category: "Platform",
+	},
+	{
+		key: "api-docs",
+		path: "/api-docs",
+		title: "API Reference",
+		description: "Try any endpoint against the live API.",
+		icon: "{ }",
+		category: "Platform",
 	},
 ]
 
@@ -88,9 +117,11 @@ export default function DashboardPage() {
 		navigate("/")
 	}
 
-	const modules = ALL_MODULES.filter(
-		(m) => !m.roles || m.roles.includes(user?.role)
-	)
+	const isPlatformAdmin = Boolean(user?.is_platform_admin)
+	const modules = isPlatformAdmin
+		? PLATFORM_MODULES
+		: ALL_MODULES.filter((m) => !m.roles || m.roles.includes(user?.role))
+	const accessLevel = isPlatformAdmin ? "PLATFORM" : user?.role
 
 	const firstName = user?.name?.split(" ")[0] || "there"
 
@@ -144,13 +175,13 @@ export default function DashboardPage() {
 								<strong>{user?.email}</strong>
 							</div>
 
-							{user?.role && (
+							{accessLevel && (
 								<div>
 									<span>ACCESS LEVEL</span>
 									<strong
-										className={`role-badge role-badge--${user.role.toLowerCase()}`}
+										className={`role-badge role-badge--${accessLevel.toLowerCase()}`}
 									>
-										{user.role}
+										{accessLevel}
 									</strong>
 								</div>
 							)}
@@ -170,8 +201,9 @@ export default function DashboardPage() {
 						</div>
 
 						<p>
-							Select a module to manage and monitor your warehouse
-							operations.
+							{isPlatformAdmin
+								? "Platform team accounts manage companies and API keys. Company inventory is never visible to the platform team."
+								: "Select a module to manage and monitor your warehouse operations."}
 						</p>
 					</div>
 

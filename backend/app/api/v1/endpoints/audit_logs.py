@@ -21,27 +21,17 @@ def _read(log: AuditLog, uname, uemail) -> AuditLogRead:
     return r
 
 
-def _base_query(db: Session):
+def base_query(db: Session, scope):
+    """scope is a filter clause choosing which rows the caller may see: one
+    company's, or the platform's."""
     # outer join: user_id becomes NULL when a user is deleted, and the row must survive
     return (db.query(AuditLog, User.name, User.email)
-            .outerjoin(User, User.id == AuditLog.user_id))
+            .outerjoin(User, User.id == AuditLog.user_id)
+            .filter(scope))
 
 
-@router.get("", response_model=AuditLogList)
-def list_audit_logs(
-    search: str | None = None,
-    user_id: str | None = None,
-    action: str | None = None,
-    entity: str | None = None,
-    entity_id: str | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    _: User = Depends(admin_only),
-):
-    q = _base_query(db)
+def list_logs(q, *, search, user_id, action, entity, entity_id, date_from, date_to,
+              skip, limit) -> AuditLogList:
     if search:
         like = f"%{search.strip()}%"
         q = q.filter(or_(AuditLog.action.like(like), AuditLog.entity.like(like),
@@ -65,9 +55,34 @@ def list_audit_logs(
     return AuditLogList(items=[_read(*r) for r in rows], total=total)
 
 
-@router.get("/{log_id}", response_model=AuditLogRead)
-def get_audit_log(log_id: str, db: Session = Depends(get_db), _: User = Depends(admin_only)):
-    row = _base_query(db).filter(AuditLog.id == log_id).first()
+def get_log_or_404(q, log_id: str) -> AuditLogRead:
+    row = q.filter(AuditLog.id == log_id).first()
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Audit log not found")
     return _read(*row)
+
+
+@router.get("", response_model=AuditLogList)
+def list_audit_logs(
+    search: str | None = None,
+    user_id: str | None = None,
+    action: str | None = None,
+    entity: str | None = None,
+    entity_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_only),
+):
+    return list_logs(
+        base_query(db, AuditLog.company_id == user.company_id),
+        search=search, user_id=user_id, action=action, entity=entity, entity_id=entity_id,
+        date_from=date_from, date_to=date_to, skip=skip, limit=limit,
+    )
+
+
+@router.get("/{log_id}", response_model=AuditLogRead)
+def get_audit_log(log_id: str, db: Session = Depends(get_db), user: User = Depends(admin_only)):
+    return get_log_or_404(base_query(db, AuditLog.company_id == user.company_id), log_id)

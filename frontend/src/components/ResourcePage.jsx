@@ -9,7 +9,7 @@ import "../pages/styles/common.css"
 import "./styles/Resource.css"
 
 const PAGE_SIZE = 20
-const WRITE_ROLES = ["ADMIN", "MANAGER"]
+const WRITE_ROLES = ["OWNER", "ADMIN", "MANAGER"]
 const PRODUCT_COLUMNS = [
     { key: "sku", header: "SKU" },
     { key: "name", header: "Name" },

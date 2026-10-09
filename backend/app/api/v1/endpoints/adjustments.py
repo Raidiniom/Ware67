@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_member, require_roles
 from app.db.session import get_db
 from app.models.inventory_adjustment import InventoryAdjustment as Adj
 from app.models.product import Product
@@ -23,10 +23,11 @@ def _read(a: Adj, pname, sku, uname) -> AdjustmentRead:
     return r
 
 
-def _base_query(db: Session):
+def _base_query(db: Session, company_id: str):
     return (db.query(Adj, Product.name, Product.sku, User.name)
             .join(Product, Product.id == Adj.product_id)
-            .join(User, User.id == Adj.user_id))
+            .join(User, User.id == Adj.user_id)
+            .filter(Adj.company_id == company_id))
 
 
 @router.get("", response_model=AdjustmentList)
@@ -40,9 +41,9 @@ def list_adjustments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_member),
 ):
-    q = _base_query(db)
+    q = _base_query(db, user.company_id)
     if search:
         like = f"%{search.strip()}%"
         q = q.filter(or_(Product.name.like(like), Product.sku.like(like),
@@ -64,8 +65,9 @@ def list_adjustments(
 
 
 @router.get("/{adjustment_id}", response_model=AdjustmentRead)
-def get_adjustment(adjustment_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    row = _base_query(db).filter(Adj.id == adjustment_id).first()
+def get_adjustment(adjustment_id: str, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_member)):
+    row = _base_query(db, user.company_id).filter(Adj.id == adjustment_id).first()
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Adjustment not found")
     return _read(*row)
@@ -74,9 +76,10 @@ def get_adjustment(adjustment_id: str, db: Session = Depends(get_db), _: User = 
 @router.post("", response_model=AdjustmentRead, status_code=status.HTTP_201_CREATED)
 def create_adjustment(payload: AdjustmentCreate, request: Request,
                       db: Session = Depends(get_db), user: User = Depends(writer)):
-    product, before, after = apply_stock_change(db, payload.product_id, payload.quantity_change)
+    product, before, after = apply_stock_change(db, payload.product_id, payload.quantity_change,
+                                                user.company_id)
 
-    adj = Adj(product_id=product.id, user_id=user.id,
+    adj = Adj(company_id=user.company_id, product_id=product.id, user_id=user.id,
               quantity_change=payload.quantity_change, reason=payload.reason, notes=payload.notes)
     db.add(adj)
     db.flush()

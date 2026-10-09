@@ -204,6 +204,12 @@
 	letter-spacing: 0.08em;
 }
 
+.role-badge--owner,
+.role-badge--platform {
+	background: rgba(17, 24, 39, 0.1);
+	color: #111827;
+}
+
 .role-badge--admin {
 	background: rgba(233, 120, 69, 0.13);
 	color: #b5522a;

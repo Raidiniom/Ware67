@@ -17,9 +17,10 @@ from app.api.v1.endpoints.integration import (
     update_partner_product,
 )
 from app.db.session import SessionLocal
-from app.models.api_key import ApiKey
+from app.models.api_key import ApiKey, ApiKeyStatus
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
+from app.models.company import Company
 from app.models.user import User, UserRole
 from app.services.api_keys import generate_api_key
 
@@ -29,35 +30,38 @@ def main() -> None:
     temporary_key: ApiKey | None = None
     temporary_product_id: str | None = None
     try:
-        admin = (
+        # A key belongs to a company and is requested by one of its owners.
+        # This skips the request/approve/reveal flow and inserts a revealed key.
+        owner = (
             db.query(User)
-            .filter(User.role == UserRole.ADMIN, User.is_active.is_(True))
+            .join(Company, Company.id == User.company_id)
+            .filter(User.role == UserRole.OWNER, User.is_active.is_(True), Company.is_active.is_(True))
             .first()
         )
-        if admin is None:
-            raise RuntimeError("No active ADMIN account exists for the smoke test")
+        if owner is None:
+            raise RuntimeError("No active company owner exists for the smoke test")
 
         raw_key, key_prefix, key_hash = generate_api_key()
+        all_scopes = ["products:read", "products:create", "products:update", "products:delete"]
         temporary_key = ApiKey(
+            company_id=owner.company_id,
             name="TEMPORARY API KEY SMOKE TEST",
+            status=ApiKeyStatus.ACTIVE,
             key_prefix=key_prefix,
             key_hash=key_hash,
-            scopes=[
-                "products:read",
-                "products:create",
-                "products:update",
-                "products:delete",
-            ],
-            created_by=admin.id,
+            requested_scopes=all_scopes,
+            scopes=all_scopes,
+            requested_by=owner.id,
+            revealed_by=owner.id,
         )
         db.add(temporary_key)
         db.commit()
         db.refresh(temporary_key)
 
-        authenticated_key = get_current_api_key(raw_key=raw_key, db=db)
         request = Request(
             {"type": "http", "headers": [], "client": ("127.0.0.1", 0)}
         )
+        authenticated_key = get_current_api_key(request=request, raw_key=raw_key, db=db)
         products = list_partner_products(
             search=None,
             category_id=None,
@@ -67,7 +71,7 @@ def main() -> None:
             skip=0,
             limit=5,
             db=db,
-            _api_key=authenticated_key,
+            api_key=authenticated_key,
         )
         print(f"ACTIVE_KEY_AUTHENTICATED products_returned={len(products)}")
 
@@ -105,10 +109,10 @@ def main() -> None:
         temporary_product_id = None
         print("PRODUCT_DELETE_OK")
 
-        temporary_key.is_active = False
+        temporary_key.status = ApiKeyStatus.REVOKED
         db.commit()
         try:
-            get_current_api_key(raw_key=raw_key, db=db)
+            get_current_api_key(request=request, raw_key=raw_key, db=db)
         except HTTPException as exc:
             if exc.status_code != 401:
                 raise

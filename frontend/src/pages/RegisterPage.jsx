@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { register } from "../api/auth"
+import { errorMessage } from "../api/resources"
 import AuthShell from "../components/AuthShell"
 
 export default function RegisterPage() {
     const navigate = useNavigate()
-    const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" })
+    const [form, setForm] = useState({ companyName: "", name: "", email: "", password: "", confirmPassword: "" })
     const [error, setError] = useState("")
     const [submitting, setSubmitting] = useState(false)
 
@@ -28,11 +29,16 @@ export default function RegisterPage() {
 
         setSubmitting(true)
         try {
-            await register({ name: form.name, email: form.email, password: form.password })
+            await register({
+                companyName: form.companyName,
+                name: form.name,
+                email: form.email,
+                password: form.password,
+            })
             navigate("/login", { state: { registered: true } })
         } catch (err) {
-            const detail = err?.response?.data?.detail
-            setError(typeof detail === "string" ? detail : "Unable to create your account. Please try again.")
+            // Shows validation details too (e.g. an invalid email), not just plain messages.
+            setError(errorMessage(err, "Unable to create your account. Please try again."))
         } finally {
             setSubmitting(false)
         }
@@ -41,8 +47,8 @@ export default function RegisterPage() {
     return (
         <AuthShell
             eyebrow="WARE67 / GET STARTED"
-            title="Create your account"
-            subtitle="Set up access to your team's warehouse operations."
+            title="Create your company"
+            subtitle="Sign up your business. You'll be its owner and can add your team afterwards."
             footer={
                 <>
                     Already have an account? <Link to="/login">Sign in</Link>
@@ -57,7 +63,19 @@ export default function RegisterPage() {
                 )}
 
                 <label className="auth-field">
-                    <span>Full name</span>
+                    <span>Company name</span>
+                    <input
+                        type="text"
+                        value={form.companyName}
+                        onChange={update("companyName")}
+                        required
+                        maxLength={150}
+                        autoComplete="organization"
+                    />
+                </label>
+
+                <label className="auth-field">
+                    <span>Your full name</span>
                     <input type="text" value={form.name} onChange={update("name")} required autoComplete="name" />
                 </label>
 

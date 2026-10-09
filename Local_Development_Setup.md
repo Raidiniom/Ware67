@@ -195,11 +195,45 @@ curl https://ware67-api.dcism.org/health
 
 ---
 
+## Working on the company model (separate database)
+
+The company model changes the database structure (`companies` table, required
+`company_id` columns). Until it is deployed, **don't point it at the shared
+database, and never run `ware67_schema.sql` on it** (that file drops every
+table): production and everyone else's backend still run the old code and use
+the same data.
+
+Use a local SQLite file instead. Nothing to install or create on DCISM, and no
+SSH tunnel needed:
+
+1. In `backend/.env`, set `DATABASE_URL=sqlite:///./db.sqlite3` (keep your
+   MySQL line commented out so you can switch back).
+2. Create the tables (from `backend/`):
+   ```bash
+   python scripts/init_dev_sqlite.py
+   ```
+   It refuses to run unless `DATABASE_URL` is SQLite. Delete `db.sqlite3` to
+   start over.
+3. Create your platform team account. The script asks for the password, so it
+   never ends up in a file or the repo:
+   ```bash
+   python scripts/create_platform_admin.py --email platform_dev1@ware67.com --name "Platform Dev 1"
+   ```
+4. Start the backend and frontend as usual, then sign up a company on the
+   register page. You become its `OWNER`. Sign up a second company to check
+   that neither can see the other's data.
+
+Switch `DATABASE_URL` back to the shared database when you work on anything
+that isn't on the company model branch.
+
+---
+
 ## Notes / gotchas
 
 - **Shared DB warning:** everyone's local backend points at the *same* remote DB via tunnel —
   there's no separate local copy. Be careful with destructive testing or concurrent migrations;
-  coordinate with teammates before running `alembic upgrade head`.
+  coordinate with teammates before running `alembic upgrade head`. (Exception: work on the
+  company model uses a local SQLite file, see above.)
 - Don't commit `backend/.env` or `frontend/.env.local` — both are gitignored by design.
 - If `requirements.txt` is missing a package someone added locally, add it there too so fresh
   clones don't break the same way.

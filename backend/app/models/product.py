@@ -1,14 +1,18 @@
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from app.db.base_class import Base
+from app.models.tenant import company_id_column
 
 
 class Product(Base):
     __tablename__ = "products"
+    # Two companies may both sell an "SKU-001".
+    __table_args__ = (UniqueConstraint("company_id", "sku", name="uq_products_company_sku"),)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    sku = Column(String(100), nullable=False, unique=True)
+    company_id = company_id_column()
+    sku = Column(String(100), nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
     category_id = Column(String(36), ForeignKey("categories.id", onupdate="CASCADE", ondelete="SET NULL"))

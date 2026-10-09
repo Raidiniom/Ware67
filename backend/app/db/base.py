@@ -2,6 +2,7 @@ from app.db.base_class import Base  # noqa: F401
 
 # Import every model so Base.metadata knows about all tables.
 # Alembic autogenerate (alembic/env.py) relies on this file.
+from app.models.company import Company  # noqa: F401
 from app.models.role import Role  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.category import Category  # noqa: F401

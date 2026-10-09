@@ -1,6 +1,9 @@
 backend/venv/
 backend/venv*/
 
+examples/
+postman/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

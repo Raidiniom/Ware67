@@ -1,8 +1,8 @@
 import unittest
 
-from app.api.v1.endpoints.api_keys import router as management_router
+from app.api.v1.endpoints.api_keys import company_router, platform_router
 from app.api.v1.endpoints.integration import router as integration_router
-from app.schemas.api_key import ApiKeyCreate
+from app.schemas.api_key import ApiKeyRequestCreate
 from app.services.api_keys import (
     extract_key_prefix,
     generate_api_key,
@@ -27,11 +27,14 @@ class ApiKeyRequirementsTests(unittest.TestCase):
         self.assertIsNone(extract_key_prefix("not-a-ware67-key"))
 
     def test_management_and_partner_routes_are_registered(self):
-        management_paths = {route.path for route in management_router.routes}
+        company_paths = {route.path for route in company_router.routes}
+        platform_paths = {route.path for route in platform_router.routes}
         integration_paths = {route.path for route in integration_router.routes}
 
-        self.assertIn("/api-keys", management_paths)
-        self.assertIn("/api-keys/{api_key_id}", management_paths)
+        self.assertIn("/company/api-keys", company_paths)
+        self.assertIn("/company/api-keys/{api_key_id}/reveal", company_paths)
+        self.assertIn("/platform/api-keys/{api_key_id}/approve", platform_paths)
+        self.assertIn("/platform/api-keys/expiring", platform_paths)
         self.assertIn("/integration/products", integration_paths)
         self.assertIn("/integration/products/{product_id}", integration_paths)
         self.assertIn("/integration/categories", integration_paths)
@@ -46,8 +49,7 @@ class ApiKeyRequirementsTests(unittest.TestCase):
         self.assertTrue({"GET", "POST", "PATCH", "DELETE"}.issubset(methods))
 
     def test_product_write_scopes_are_supported(self):
-        payload = ApiKeyCreate(
-            company_id="company-1",
+        payload = ApiKeyRequestCreate(
             name="Full product integration",
             scopes=[
                 "products:read",
@@ -68,8 +70,7 @@ class ApiKeyRequirementsTests(unittest.TestCase):
         )
 
     def test_duplicate_scopes_are_removed(self):
-        payload = ApiKeyCreate(
-            company_id="company-1",
+        payload = ApiKeyRequestCreate(
             name="Read integration",
             scopes=["products:read", "products:read"],
         )

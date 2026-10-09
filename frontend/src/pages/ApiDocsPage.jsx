@@ -84,7 +84,7 @@ function Try({ ep, creds, onToken, onApiKey }) {
             if (ep.path === "/auth/login" && r.status === 200 && r.data?.access_token) {
                 onToken(r.data.access_token)
             }
-            if (ep.path === "/api-keys" && ep.method === "POST" && r.status === 201 && r.data?.api_key) {
+            if (ep.path.endsWith("/reveal") && r.status === 200 && r.data?.api_key) {
                 onApiKey(r.data.api_key)
             }
         } catch {
@@ -237,7 +237,8 @@ export default function ApiDocsPage() {
                 </div>
                 <p className="docs-hint">
                     Access tokens expire after a short time. A 401 means it is time to log in again. Partner keys are
-                    issued by an admin via <code>POST /api-keys</code> and are never stored by this page.
+                    requested by a company owner or admin, approved by the WARE67 team, then revealed once via
+                    <code>POST /company/api-keys/{"{api_key_id}"}/reveal</code>. This page never stores them.
                 </p>
             </section>
 

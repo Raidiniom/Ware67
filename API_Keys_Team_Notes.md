@@ -16,6 +16,10 @@ mysql -h 127.0.0.1 -P 3307 -u YOUR_DB_USER -p YOUR_DB_NAME < backend/schema/add_
 
 ### Upgrading from HMAC keys (one-time)
 
+> **Skip this if you deploy the company model with a fresh database**
+> (Company_Model_Plan.md, "Deploying PR A"): rebuilding from
+> `ware67_schema.sql` deletes all old keys anyway.
+
 Keys used to be hashed with HMAC-SHA256 keyed by `JWT_SECRET_KEY`. They are now
 plain SHA-256. Raw keys are never stored, so old hashes can't be converted and
 **every key issued before this change stops working**. Mark them revoked and
@@ -73,19 +77,26 @@ breaks every partner integration.
 On each request (`get_current_api_key` in `backend/app/api/deps.py`):
 
 1. Find the row by prefix, compare hashes in constant time.
-2. Only after the hash matches: reject if revoked or expired. This way someone
-   guessing keys learns nothing about which keys exist or their state.
+2. Only after the hash matches: reject unless the key is `ACTIVE`, its company
+   is active and it hasn't expired. This way someone guessing keys learns
+   nothing about which keys exist or their state.
 3. Apply the per-key rate limit.
 4. Update `last_used_at` at most once every 5 minutes.
 5. Each route then checks its scope (`require_api_key_scope`).
 
-## Expiry
+## Time limits
 
-- No `expires_at` given → 90 days from creation.
-- `expires_at` must be in the future, at most 90 days out, and include a
-  timezone. Values without one get 422 rather than a guess.
-- Stored as naive UTC, like every other timestamp in the database.
-- Change the limit with `API_KEY_MAX_TTL_DAYS` in `backend/.env`.
+| Limit | Default | Setting |
+| ----- | ------- | ------- |
+| Key lifetime, counted from reveal | 90 days | `API_KEY_MAX_TTL_DAYS` |
+| Time to reveal an approved key | 7 days | `API_KEY_REVEAL_WINDOW_DAYS` |
+| Open requests (pending or approved) per company | 5 | `API_KEY_MAX_OPEN_REQUESTS` |
+
+- Times are stored as naive UTC, like every other timestamp in the database.
+- `LAPSED` and `EXPIRED` happen with time, not with a write: the API works them
+  out when showing a key (`effective_status` in `app/services/api_keys.py`).
+  `LAPSED` is also saved when someone tries to reveal a lapsed approval.
+  `EXPIRED` is never stored; it's an `ACTIVE` key past `expires_at`.
 
 ## Rate limiting
 
@@ -105,7 +116,11 @@ On each request (`get_current_api_key` in `backend/app/api/deps.py`):
 
 | Action | When | Details |
 | ------ | ---- | ------- |
-| `CREATE` / `REVOKE` on `API_KEY` | admin issues or revokes a key | name, prefix, scopes |
+| `REQUEST` on `API_KEY` | company asks for a key | name, requested scopes |
+| `APPROVE` / `REJECT` on `API_KEY` | platform team reviews | granted scopes, or the reason |
+| `REVEAL` on `API_KEY` | company reveals the key | name, prefix, scopes, expiry (never the key) |
+| `LAPSE` on `API_KEY` | a reveal is tried after the window closed | name |
+| `REVOKE` on `API_KEY` | company or platform team revokes or withdraws | name, prefix, previous status |
 | `REVOKE` on `API_KEY`, no user | `api_keys_sha256_migration.sql` | name, prefix, `reason: "hash migration"` |
 | `API_KEY_AUTH_FAILED` | bad, unknown, revoked or expired key | `reason`, `key_prefix` (never the key itself) |
 | product/transaction actions | partner writes | `api_key_id`, `api_key_name`; `user_id` is empty and the row belongs to the key's company. Partner stock transactions store `api_key_id` instead of a user. |
@@ -140,42 +155,54 @@ python -m unittest discover -s tests
 ```
 
 The API tests use FastAPI's `TestClient`, which with starlette 1.x needs the
-`httpx2` package (listed in `requirements.txt`). Key auth and issuing are covered
-in `tests/test_api_key_auth.py`.
+`httpx2` package (listed in `requirements.txt`). Key auth and the
+request/approve/reveal flow are covered in `tests/test_api_key_auth.py`;
+keeping keys inside their company is covered in `tests/test_company_isolation.py`.
 
-## Who manages keys
+## Who does what
 
-Creating, listing and revoking keys is done by the **platform team** (the
-WARE67 developers), not by the companies using WARE67. That's accounts with
-`is_platform_admin`, created with `backend/scripts/create_platform_admin.py`; no
-company role (owner, admin, etc.) can do it.
+| | Company `OWNER` / `ADMIN` | Platform team |
+| --- | --- | --- |
+| Request a key | ✅ `POST /company/api-keys` | ❌ |
+| Approve or reject | ❌ | ✅ `/platform/api-keys/{id}/approve`, `/reject` |
+| Reveal (see the key) | ✅ once, `POST /company/api-keys/{id}/reveal` | ❌ never |
+| See key metadata | own company only | all companies |
+| Revoke | own company's keys | any key |
+| Keys expiring soon | | ✅ `GET /platform/api-keys/expiring?days=14` |
+
+Other company roles (manager, staff, guest) can't touch keys at all. The
+platform team is accounts with `is_platform_admin`, created with
+`backend/scripts/create_platform_admin.py`.
 
 Every key belongs to one company (`company_id`) and can only read and change
 that company's data. Deactivating the company stops its keys immediately
 (failed attempts are audited with `reason: "company_inactive"`).
 
-### Planned flow (PR B)
+### The flow
 
-Agreed design; not built yet. Until then the platform team creates keys
-directly for a company with `POST /api-keys`.
+```
+PENDING --approve--> APPROVED --reveal--> ACTIVE --(90 days)--> EXPIRED
+   |                    |                   |
+   +--reject--> REJECTED +--(7 days)--> LAPSED
+   |                    |                   |
+   +-------------------revoke/withdraw------+--> REVOKED
+```
 
-1. **Request:** a company asks for a key (name + scopes). Status `PENDING`; no
-   key exists yet.
+1. **Request:** a company asks for a key (name, scopes, optional purpose).
+   Status `PENDING`; no key exists yet.
 2. **Approve / reject:** the platform team approves (optionally with fewer
-   scopes) or rejects with a reason. Still no key.
-3. **Reveal:** the company clicks "Reveal key". Only then is the key generated,
-   hashed and shown once. The platform team never sees the raw key.
-   - The 90 days start at reveal.
-   - Approvals not revealed within 7 days lapse.
+   scopes, never more) or rejects with a reason the company can see.
+   Still no key.
+3. **Reveal:** the company reveals it once. Only then is the key generated,
+   hashed and returned. The row is locked while this happens, so a double
+   click can't produce two keys. The platform team never sees the raw key.
 4. **Renew:** the company requests a new key before expiry; the old one keeps
    working until it expires so they can switch over without downtime.
 
-Platform team view: pending requests, all companies' keys, keys expiring in
-the next 14 days, revoke any key. Company view: read-only metadata of their own
-keys (name, prefix, scopes, last used, expiry), plus request and reveal.
-
 ## Known gaps (planned)
 
-- Companies can't yet see, request, reveal or revoke their own keys; that's the
-  request → approve → reveal flow above (PR B).
-- There's no rotate endpoint; create a new key, switch over, revoke the old one.
+- No frontend pages yet for requesting, reviewing or revealing keys; for now
+  use the in-app API reference (PR C adds the pages).
+- Nobody is notified automatically: the platform team checks the pending queue
+  and the expiring list themselves.
+- There's no rotate endpoint; request a new key, switch over, revoke the old one.

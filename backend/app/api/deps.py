@@ -10,7 +10,7 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.user import User, UserRole
-from app.models.api_key import ApiKey
+from app.models.api_key import ApiKey, ApiKeyStatus
 from app.services.api_keys import extract_key_prefix, verify_api_key
 from app.services.audit import client_ip, log_action
 from app.services.rate_limit import FixedWindowLimiter
@@ -141,8 +141,9 @@ def get_current_api_key(
     if not verify_api_key(raw_key, api_key.key_hash):
         raise _reject_api_key(db, request, "bad_secret", key_prefix=key_prefix, api_key=api_key)
     # Revoked and expired are only distinguished after the secret matched, so
-    # they reveal nothing to someone who doesn't hold the key.
-    if not api_key.is_active:
+    # they reveal nothing to someone who doesn't hold the key. Only revealed
+    # keys have a prefix and hash, so anything matched here was once ACTIVE.
+    if api_key.status != ApiKeyStatus.ACTIVE:
         raise _reject_api_key(db, request, "revoked", key_prefix=key_prefix, api_key=api_key)
     company = db.get(Company, api_key.company_id)
     if company is None or not company.is_active:

@@ -45,13 +45,13 @@ class IsolationTestCase(ApiTestCase):
                                                   user_id=self.a_owner, quantity_change=1))
         self.a_log = self.add(AuditLog(company_id=self.a, user_id=self.a_owner, action="CREATE",
                                        entity="PRODUCT", entity_id=self.a_product))
-        self.a_key, self.a_key_id = self.make_key(self.a, self.platform_id, ALL_SCOPES, name="A key")
+        self.a_key, self.a_key_id = self.make_key(self.a, self.a_owner, ALL_SCOPES, name="A key")
 
         # Company B, the one trying to get in.
         self.b = self.make_company("Company B")
         self.b_owner = self.make_user(self.b, UserRole.OWNER)
         self.b_product = self.add(Product(company_id=self.b, sku="B-1", name="B Widget"))
-        self.b_key, _ = self.make_key(self.b, self.platform_id, ALL_SCOPES, name="B key")
+        self.b_key, _ = self.make_key(self.b, self.b_owner, ALL_SCOPES, name="B key")
 
     def as_b(self):
         return self.auth(self.b_owner)
@@ -272,27 +272,47 @@ class PlatformAdminTests(IsolationTestCase):
 
     def test_company_members_cannot_use_platform_routes(self):
         for method, path in (("get", "/platform/companies"), ("get", "/platform/audit-logs"),
-                             ("get", "/api-keys"), ("patch", "/roles/GUEST")):
+                             ("get", "/platform/api-keys"), ("get", "/platform/api-keys/expiring"),
+                             ("post", f"/platform/api-keys/{self.a_key_id}/approve"),
+                             ("patch", "/roles/GUEST")):
             with self.subTest(path=path):
-                kwargs = {"json": {"description": "x"}} if method == "patch" else {}
+                kwargs = {"json": {"description": "x"}} if method in ("patch", "post") else {}
                 response = getattr(self.client, method)(API + path, headers=self.auth(self.a_owner), **kwargs)
                 self.assertEqual(response.status_code, 403, response.text)
 
-    def test_keys_are_issued_to_a_company(self):
-        response = self.client.post(f"{API}/api-keys", headers=self.as_platform(),
-                                    json={"company_id": self.b, "name": "Issued"})
-        self.assertEqual(response.status_code, 201, response.text)
-        raw_key = response.json()["api_key"]
+    def test_a_revealed_key_only_sees_the_requesting_company(self):
+        key_id = self.client.post(f"{API}/company/api-keys", headers=self.as_b(),
+                                  json={"name": "B integration"}).json()["id"]
+        self.client.post(f"{API}/platform/api-keys/{key_id}/approve", headers=self.as_platform(), json={})
+        raw_key = self.client.post(f"{API}/company/api-keys/{key_id}/reveal", headers=self.as_b()).json()["api_key"]
         products = self.client.get(f"{API}/integration/products", headers={"X-API-Key": raw_key}).json()
         self.assertEqual({p["id"] for p in products}, {self.b_product})
 
-    def test_keys_cannot_be_issued_to_a_missing_or_inactive_company(self):
-        inactive = self.make_company("Gone", is_active=False)
-        for company_id in ("no-such-company", inactive):
-            with self.subTest(company_id=company_id):
-                response = self.client.post(f"{API}/api-keys", headers=self.as_platform(),
-                                            json={"company_id": company_id, "name": "Nope"})
-                self.assertEqual(response.status_code, 400)
+
+class CompanyKeyIsolationTests(IsolationTestCase):
+    """Company B can't see, reveal or revoke company A's keys or requests."""
+
+    def test_key_list_only_shows_own_keys(self):
+        keys = self.client.get(f"{API}/company/api-keys", headers=self.as_b()).json()["items"]
+        self.assertNotIn(self.a_key_id, {k["id"] for k in keys})
+
+    def test_cannot_reveal_another_companys_approved_key(self):
+        a_request = self.client.post(f"{API}/company/api-keys", headers=self.auth(self.a_owner),
+                                     json={"name": "A integration"}).json()["id"]
+        self.client.post(f"{API}/platform/api-keys/{a_request}/approve",
+                         headers=self.auth(self.platform_id), json={})
+        response = self.client.post(f"{API}/company/api-keys/{a_request}/reveal", headers=self.as_b())
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("api_key", response.json())
+        # A can still reveal it: B's attempt didn't use it up.
+        mine = self.client.post(f"{API}/company/api-keys/{a_request}/reveal", headers=self.auth(self.a_owner))
+        self.assertEqual(mine.status_code, 200)
+
+    def test_cannot_revoke_another_companys_key(self):
+        response = self.client.delete(f"{API}/company/api-keys/{self.a_key_id}", headers=self.as_b())
+        self.assertEqual(response.status_code, 404)
+        working = self.client.get(f"{API}/integration/products", headers={"X-API-Key": self.a_key})
+        self.assertEqual(working.status_code, 200)
 
 
 class DeactivatedCompanyTests(IsolationTestCase):
@@ -435,6 +455,8 @@ ROUTE_CLASSIFICATION = {
         ("GET", "/adjustments"), ("POST", "/adjustments"), ("GET", "/adjustments/{adjustment_id}"),
         ("GET", "/audit-logs"), ("GET", "/audit-logs/{log_id}"),
         ("GET", "/company"), ("PATCH", "/company"),
+        ("GET", "/company/api-keys"), ("POST", "/company/api-keys"),
+        ("POST", "/company/api-keys/{api_key_id}/reveal"), ("DELETE", "/company/api-keys/{api_key_id}"),
     )},
     # Company data, scoped by the API key's company_id (tested above).
     **{(m, p): "api_key" for m, p in (
@@ -446,7 +468,9 @@ ROUTE_CLASSIFICATION = {
     # Platform team only; no company inventory behind them.
     **{(m, p): "platform" for m, p in (
         ("PATCH", "/roles/{role_name}"),
-        ("GET", "/api-keys"), ("POST", "/api-keys"), ("DELETE", "/api-keys/{api_key_id}"),
+        ("GET", "/platform/api-keys"), ("GET", "/platform/api-keys/expiring"),
+        ("GET", "/platform/api-keys/{api_key_id}"), ("POST", "/platform/api-keys/{api_key_id}/approve"),
+        ("POST", "/platform/api-keys/{api_key_id}/reject"), ("DELETE", "/platform/api-keys/{api_key_id}"),
         ("GET", "/platform/companies"), ("GET", "/platform/companies/{company_id}"),
         ("PATCH", "/platform/companies/{company_id}"),
         ("GET", "/platform/audit-logs"), ("GET", "/platform/audit-logs/{log_id}"),

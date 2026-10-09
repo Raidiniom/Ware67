@@ -77,6 +77,35 @@ const ALL_MODULES = [
 		icon: "♙",
 		category: "Administration",
 	},
+	{
+		key: "api-keys",
+		path: "/api-keys",
+		title: "API Keys",
+		description: "Connect your other systems to your products.",
+		roles: ["OWNER", "ADMIN"],
+		icon: "⚿",
+		category: "Administration",
+	},
+]
+
+// The platform team manages companies and API keys, never a company's inventory.
+const PLATFORM_MODULES = [
+	{
+		key: "platform",
+		path: "/platform",
+		title: "Platform Console",
+		description: "Review API key requests, watch expiring keys and manage companies.",
+		icon: "◎",
+		category: "Platform",
+	},
+	{
+		key: "api-docs",
+		path: "/api-docs",
+		title: "API Reference",
+		description: "Try any endpoint against the live API.",
+		icon: "{ }",
+		category: "Platform",
+	},
 ]
 
 export default function DashboardPage() {
@@ -88,11 +117,9 @@ export default function DashboardPage() {
 		navigate("/")
 	}
 
-	// The platform team manages companies, never a company's inventory, so
-	// none of these modules are theirs.
 	const isPlatformAdmin = Boolean(user?.is_platform_admin)
 	const modules = isPlatformAdmin
-		? []
+		? PLATFORM_MODULES
 		: ALL_MODULES.filter((m) => !m.roles || m.roles.includes(user?.role))
 	const accessLevel = isPlatformAdmin ? "PLATFORM" : user?.role
 
@@ -175,7 +202,7 @@ export default function DashboardPage() {
 
 						<p>
 							{isPlatformAdmin
-								? "Platform team accounts manage companies and API keys, not a company's inventory. The platform console is coming next."
+								? "Platform team accounts manage companies and API keys. Company inventory is never visible to the platform team."
 								: "Select a module to manage and monitor your warehouse operations."}
 						</p>
 					</div>

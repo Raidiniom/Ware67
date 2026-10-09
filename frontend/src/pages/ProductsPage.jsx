@@ -8,7 +8,7 @@ import "./styles/common.css"
 import "../components/styles/Resource.css"
 
 const PAGE_SIZE = 20
-const WRITE_ROLES = ["ADMIN", "MANAGER"]
+const WRITE_ROLES = ["OWNER", "ADMIN", "MANAGER"]
 const EMPTY = { sku: "", name: "", description: "", category_id: "", supplier_id: "", location_id: "", unit: "", price: "0.00", reorder_level: "0", initial_stock: "0" }
 
 // Dropdown data. The list endpoints cap `limit` at 200.

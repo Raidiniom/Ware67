@@ -29,8 +29,11 @@ class TransactionRead(BaseModel):
     product_id: str
     product_name: str | None = None
     product_sku: str | None = None
-    user_id: str
+    # A person in the app, or a partner integration (then user_id is None).
+    user_id: str | None = None
     user_name: str | None = None
+    api_key_id: str | None = None
+    api_key_name: str | None = None
     type: str
     quantity: int
     reference_type: str | None

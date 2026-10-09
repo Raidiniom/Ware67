@@ -4,12 +4,15 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String
 from sqlalchemy.sql import func
 
 from app.db.base_class import Base
+from app.models.tenant import company_id_column
 
 
 class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # The company whose data this key can read and change.
+    company_id = company_id_column()
     name = Column(String(150), nullable=False)
     key_prefix = Column(String(32), nullable=False, unique=True, index=True)
     key_hash = Column(String(64), nullable=False, unique=True)

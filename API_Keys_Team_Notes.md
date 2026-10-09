@@ -108,7 +108,7 @@ On each request (`get_current_api_key` in `backend/app/api/deps.py`):
 | `CREATE` / `REVOKE` on `API_KEY` | admin issues or revokes a key | name, prefix, scopes |
 | `REVOKE` on `API_KEY`, no user | `api_keys_sha256_migration.sql` | name, prefix, `reason: "hash migration"` |
 | `API_KEY_AUTH_FAILED` | bad, unknown, revoked or expired key | `reason`, `key_prefix` (never the key itself) |
-| product/transaction actions | partner writes | `api_key_id`, `api_key_name`, logged under the issuing admin's `user_id` |
+| product/transaction actions | partner writes | `api_key_id`, `api_key_name`; `user_id` is empty and the row belongs to the key's company. Partner stock transactions store `api_key_id` instead of a user. |
 
 Requests with no key at all are counted for rate limiting but not audited, since
 they're mostly crawlers. Failures past the per-IP limit return 429 and are not
@@ -146,13 +146,18 @@ in `tests/test_api_key_auth.py`.
 ## Who manages keys
 
 Creating, listing and revoking keys is done by the **platform team** (the
-WARE67 developers), not by the companies using WARE67. Today that means the
-global `ADMIN` role. Once the company model exists, it becomes a platform-level
-permission that no company role (owner, admin, etc.) can get.
+WARE67 developers), not by the companies using WARE67. That's accounts with
+`is_platform_admin`, created with `backend/scripts/create_platform_admin.py`; no
+company role (owner, admin, etc.) can do it.
 
-### Planned flow (company model)
+Every key belongs to one company (`company_id`) and can only read and change
+that company's data. Deactivating the company stops its keys immediately
+(failed attempts are audited with `reason: "company_inactive"`).
 
-Agreed design; not built yet.
+### Planned flow (PR B)
+
+Agreed design; not built yet. Until then the platform team creates keys
+directly for a company with `POST /api-keys`.
 
 1. **Request:** a company asks for a key (name + scopes). Status `PENDING`; no
    key exists yet.
@@ -171,9 +176,6 @@ keys (name, prefix, scopes, last used, expiry), plus request and reveal.
 
 ## Known gaps (planned)
 
-- Keys aren't tied to a company yet; any key can read and change every product.
-  The planned company/tenant model will make keys and data belong to a company,
-  issued to that company by the platform team.
-- A key keeps working if the admin who issued it is deactivated. Fixed by the
-  same company model (keys become company-owned).
+- Companies can't yet see, request, reveal or revoke their own keys; that's the
+  request → approve → reveal flow above (PR B).
 - There's no rotate endpoint; create a new key, switch over, revoke the old one.

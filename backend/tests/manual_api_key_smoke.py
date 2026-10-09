@@ -20,7 +20,8 @@ from app.db.session import SessionLocal
 from app.models.api_key import ApiKey
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
-from app.models.user import User, UserRole
+from app.models.company import Company
+from app.models.user import User
 from app.services.api_keys import generate_api_key
 
 
@@ -29,16 +30,21 @@ def main() -> None:
     temporary_key: ApiKey | None = None
     temporary_product_id: str | None = None
     try:
+        # Keys are issued by the platform team, to a company.
         admin = (
             db.query(User)
-            .filter(User.role == UserRole.ADMIN, User.is_active.is_(True))
+            .filter(User.is_platform_admin.is_(True), User.is_active.is_(True))
             .first()
         )
         if admin is None:
-            raise RuntimeError("No active ADMIN account exists for the smoke test")
+            raise RuntimeError("No active platform admin exists (see scripts/create_platform_admin.py)")
+        company = db.query(Company).filter(Company.is_active.is_(True)).first()
+        if company is None:
+            raise RuntimeError("No active company exists for the smoke test")
 
         raw_key, key_prefix, key_hash = generate_api_key()
         temporary_key = ApiKey(
+            company_id=company.id,
             name="TEMPORARY API KEY SMOKE TEST",
             key_prefix=key_prefix,
             key_hash=key_hash,

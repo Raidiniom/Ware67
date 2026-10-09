@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from app.models.product import Product
 
 
-def apply_stock_change(db: Session, product_id: str, delta: int) -> tuple[Product, int, int]:
+def apply_stock_change(db: Session, product_id: str, delta: int, company_id: str) -> tuple[Product, int, int]:
     """Locks the product row, applies delta, and refuses to go negative.
-    The caller commits, so stock update, history row, and audit row land together."""
+    The caller commits, so stock update, history row, and audit row land together.
+    Only the given company's products can be found."""
     product = (
         db.query(Product)
-        .filter(Product.id == product_id)
+        .filter(Product.id == product_id, Product.company_id == company_id)
         .with_for_update()
         .one_or_none()
     )

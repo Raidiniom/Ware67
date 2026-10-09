@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_member, require_roles
 from app.db.session import get_db
 from app.models.product import Product
 from app.models.supplier import Supplier
@@ -10,6 +10,7 @@ from app.models.user import User
 from app.schemas.common import ProductBrief
 from app.schemas.supplier import SupplierCreate, SupplierList, SupplierRead, SupplierUpdate
 from app.services.audit import log_audit
+from app.services.tenancy import get_owned_or_404
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 writer = require_roles("ADMIN", "MANAGER")
@@ -27,15 +28,14 @@ def _to_read(s: Supplier, count: int) -> SupplierRead:
     return r
 
 
-def _get_or_404(db: Session, supplier_id: str) -> Supplier:
-    s = db.get(Supplier, supplier_id)
-    if not s:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Supplier not found")
-    return s
+def _get_or_404(db: Session, supplier_id: str, company_id: str) -> Supplier:
+    return get_owned_or_404(db, Supplier, supplier_id, company_id, "Supplier")
 
 
-def _count(db: Session, supplier_id: str) -> int:
-    return db.query(func.count(Product.id)).filter(Product.supplier_id == supplier_id).scalar()
+def _count(db: Session, supplier_id: str, company_id: str) -> int:
+    return (db.query(func.count(Product.id))
+            .filter(Product.supplier_id == supplier_id, Product.company_id == company_id)
+            .scalar())
 
 
 @router.get("", response_model=SupplierList)
@@ -46,11 +46,13 @@ def list_suppliers(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_member),
 ):
     count_col = func.count(Product.id).label("product_count")
     q = (db.query(Supplier, count_col)
-         .outerjoin(Product, Product.supplier_id == Supplier.id)
+         .outerjoin(Product, (Product.supplier_id == Supplier.id)
+                    & (Product.company_id == user.company_id))
+         .filter(Supplier.company_id == user.company_id)
          .group_by(Supplier.id))
     if search:
         like = f"%{search.strip()}%"
@@ -71,21 +73,23 @@ def list_suppliers(
 
 
 @router.get("/{supplier_id}", response_model=SupplierRead)
-def get_supplier(supplier_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    s = _get_or_404(db, supplier_id)
-    return _to_read(s, _count(db, s.id))
+def get_supplier(supplier_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_member)):
+    s = _get_or_404(db, supplier_id, user.company_id)
+    return _to_read(s, _count(db, s.id, user.company_id))
 
 
 @router.get("/{supplier_id}/products", response_model=list[ProductBrief])
-def supplier_products(supplier_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    _get_or_404(db, supplier_id)
-    return db.query(Product).filter(Product.supplier_id == supplier_id).order_by(Product.name).all()
+def supplier_products(supplier_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_member)):
+    _get_or_404(db, supplier_id, user.company_id)
+    return (db.query(Product)
+            .filter(Product.supplier_id == supplier_id, Product.company_id == user.company_id)
+            .order_by(Product.name).all())
 
 
 @router.post("", response_model=SupplierRead, status_code=status.HTTP_201_CREATED)
 def create_supplier(payload: SupplierCreate, request: Request,
                     db: Session = Depends(get_db), user: User = Depends(writer)):
-    s = Supplier(**payload.model_dump())
+    s = Supplier(**payload.model_dump(), company_id=user.company_id)
     db.add(s)
     db.flush()
     log_audit(db, user_id=user.id, action="CREATE", entity="SUPPLIER", entity_id=s.id,
@@ -98,7 +102,7 @@ def create_supplier(payload: SupplierCreate, request: Request,
 @router.put("/{supplier_id}", response_model=SupplierRead)
 def update_supplier(supplier_id: str, payload: SupplierUpdate, request: Request,
                     db: Session = Depends(get_db), user: User = Depends(writer)):
-    s = _get_or_404(db, supplier_id)
+    s = _get_or_404(db, supplier_id, user.company_id)
     before = _snapshot(s)
     for k, v in payload.model_dump().items():
         setattr(s, k, v)
@@ -106,15 +110,16 @@ def update_supplier(supplier_id: str, payload: SupplierUpdate, request: Request,
               details={"previous_value": before, "new_value": _snapshot(s)}, request=request)
     db.commit()
     db.refresh(s)
-    return _to_read(s, _count(db, s.id))
+    return _to_read(s, _count(db, s.id, user.company_id))
 
 
 @router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_supplier(supplier_id: str, request: Request,
                     db: Session = Depends(get_db), user: User = Depends(writer)):
-    s = _get_or_404(db, supplier_id)
+    s = _get_or_404(db, supplier_id, user.company_id)
     log_audit(db, user_id=user.id, action="DELETE", entity="SUPPLIER", entity_id=s.id,
-              details={"previous_value": _snapshot(s), "products_unassigned": _count(db, s.id)},
+              details={"previous_value": _snapshot(s),
+                       "products_unassigned": _count(db, s.id, user.company_id)},
               request=request)
     db.delete(s)  # ON DELETE SET NULL keeps the products
     db.commit()

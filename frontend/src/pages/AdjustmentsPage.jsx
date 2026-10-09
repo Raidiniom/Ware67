@@ -7,7 +7,7 @@ import { errorMessage } from "../api/resources"
 import { useAuth } from "../context/AuthContext"
 import { formatDateTime } from "../utils/format"
 
-const WRITE_ROLES = ["ADMIN", "MANAGER"]
+const WRITE_ROLES = ["OWNER", "ADMIN", "MANAGER"]
 
 const columns = [
     { key: "created_at", header: "When", render: (r) => <span className="cell-nowrap">{formatDateTime(r.created_at)}</span> },

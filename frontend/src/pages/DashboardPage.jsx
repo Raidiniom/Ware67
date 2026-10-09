@@ -64,7 +64,7 @@ const ALL_MODULES = [
 		path: "/audit-logs",
 		title: "Audit Logs",
 		description: "Who did what, and when.",
-		roles: ["ADMIN"],
+		roles: ["OWNER", "ADMIN"],
 		icon: "⌁",
 		category: "Administration",
 	},
@@ -73,7 +73,7 @@ const ALL_MODULES = [
 		path: "/users",
 		title: "Users & Roles",
 		description: "Manage accounts and permissions.",
-		roles: ["ADMIN", "MANAGER"],
+		roles: ["OWNER", "ADMIN", "MANAGER"],
 		icon: "♙",
 		category: "Administration",
 	},
@@ -88,9 +88,13 @@ export default function DashboardPage() {
 		navigate("/")
 	}
 
-	const modules = ALL_MODULES.filter(
-		(m) => !m.roles || m.roles.includes(user?.role)
-	)
+	// The platform team manages companies, never a company's inventory, so
+	// none of these modules are theirs.
+	const isPlatformAdmin = Boolean(user?.is_platform_admin)
+	const modules = isPlatformAdmin
+		? []
+		: ALL_MODULES.filter((m) => !m.roles || m.roles.includes(user?.role))
+	const accessLevel = isPlatformAdmin ? "PLATFORM" : user?.role
 
 	const firstName = user?.name?.split(" ")[0] || "there"
 
@@ -144,13 +148,13 @@ export default function DashboardPage() {
 								<strong>{user?.email}</strong>
 							</div>
 
-							{user?.role && (
+							{accessLevel && (
 								<div>
 									<span>ACCESS LEVEL</span>
 									<strong
-										className={`role-badge role-badge--${user.role.toLowerCase()}`}
+										className={`role-badge role-badge--${accessLevel.toLowerCase()}`}
 									>
-										{user.role}
+										{accessLevel}
 									</strong>
 								</div>
 							)}
@@ -170,8 +174,9 @@ export default function DashboardPage() {
 						</div>
 
 						<p>
-							Select a module to manage and monitor your warehouse
-							operations.
+							{isPlatformAdmin
+								? "Platform team accounts manage companies and API keys, not a company's inventory. The platform console is coming next."
+								: "Select a module to manage and monitor your warehouse operations."}
 						</p>
 					</div>
 

@@ -1,7 +1,6 @@
 -- =====================================================================
 -- WARE67 - DATABASE STRUCTURE
 -- MySQL schema generation script (fresh install; drops existing tables).
--- To upgrade an existing database instead, see company_model_migration.sql.
 -- =====================================================================
 
 SET NAMES utf8mb4;
@@ -112,32 +111,54 @@ CREATE TABLE audit_logs (
 
 -- =====================================================================
 -- API_KEYS
--- Raw keys are shown once and never stored; key_hash is a SHA-256 digest.
--- Each key reads and changes only its company's data.
+-- A row starts as a company's request (PENDING). The platform team approves
+-- (APPROVED) or rejects it; the company then reveals it once (ACTIVE). Only
+-- at reveal are key_prefix and key_hash set: the raw key is shown once and
+-- never stored; key_hash is a SHA-256 digest. Each key reads and changes
+-- only its company's data.
 -- =====================================================================
 CREATE TABLE api_keys (
-    id           CHAR(36)     NOT NULL DEFAULT (UUID()),
-    company_id   CHAR(36)     NOT NULL,
-    name         VARCHAR(150) NOT NULL,
-    key_prefix   VARCHAR(32)  NOT NULL,
-    key_hash     CHAR(64)     NOT NULL,
-    scopes       JSON         NOT NULL,
-    is_active    BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_by   CHAR(36)     NOT NULL,
-    expires_at   DATETIME     NULL,
-    last_used_at DATETIME     NULL,
-    revoked_at   DATETIME     NULL,
-    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id               CHAR(36)     NOT NULL DEFAULT (UUID()),
+    company_id       CHAR(36)     NOT NULL,
+    name             VARCHAR(150) NOT NULL,
+    purpose          TEXT         NULL,
+    status           ENUM('PENDING', 'APPROVED', 'REJECTED', 'ACTIVE', 'REVOKED', 'LAPSED')
+                                  NOT NULL DEFAULT 'PENDING',
+    requested_scopes JSON         NOT NULL,
+    scopes           JSON         NULL COMMENT 'granted at approval',
+    key_prefix       VARCHAR(32)  NULL,
+    key_hash         CHAR(64)     NULL,
+    requested_by     CHAR(36)     NOT NULL,
+    reviewed_by      CHAR(36)     NULL,
+    reviewed_at      DATETIME     NULL,
+    rejection_reason TEXT         NULL,
+    reveal_deadline  DATETIME     NULL,
+    revealed_by      CHAR(36)     NULL,
+    revealed_at      DATETIME     NULL,
+    expires_at       DATETIME     NULL,
+    last_used_at     DATETIME     NULL,
+    revoked_by       CHAR(36)     NULL,
+    revoked_at       DATETIME     NULL,
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_api_keys_prefix (key_prefix),
     UNIQUE KEY uq_api_keys_hash (key_hash),
     KEY idx_api_keys_company_id (company_id),
-    KEY idx_api_keys_created_by (created_by),
+    KEY idx_api_keys_status (status),
     CONSTRAINT fk_api_keys_company
         FOREIGN KEY (company_id) REFERENCES companies (id)
         ON UPDATE CASCADE ON DELETE RESTRICT,
-    CONSTRAINT fk_api_keys_created_by
-        FOREIGN KEY (created_by) REFERENCES users (id)
+    CONSTRAINT fk_api_keys_requested_by
+        FOREIGN KEY (requested_by) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_api_keys_reviewed_by
+        FOREIGN KEY (reviewed_by) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_api_keys_revealed_by
+        FOREIGN KEY (revealed_by) REFERENCES users (id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_api_keys_revoked_by
+        FOREIGN KEY (revoked_by) REFERENCES users (id)
         ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

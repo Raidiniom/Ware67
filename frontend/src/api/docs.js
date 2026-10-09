@@ -300,19 +300,44 @@ export const GROUPS = [
     {
         name: "API keys",
         endpoints: [
-            ep("GET", "/api-keys", "List partner API keys (metadata only)", {
-                access: PLATFORM,
-                query: [{ name: "company_id" }, ...PAGE],
+            ep("GET", "/company/api-keys", "Your company's keys and key requests", {
+                access: ADMIN,
+                query: PAGE,
+                notes: "status is PENDING, APPROVED, REJECTED, ACTIVE, REVOKED, LAPSED (approved but not revealed in time) or EXPIRED. Never includes the key itself.",
             }),
-            ep("POST", "/api-keys", "Issue a partner API key to a company", {
-                access: PLATFORM,
-                body: { company_id: "", name: "Partner Project Name", scopes: ["products:read"], expires_at: null },
-                notes: "Scopes are products:read, products:create, products:update and products:delete; grant only what the partner needs. The raw api_key is returned once, only in this response, and fills the API key field above. Keys last 90 days by default and at most 90 days; a custom expires_at must include a timezone (e.g. 2026-12-31T00:00:00Z).",
+            ep("POST", "/company/api-keys", "Request a partner API key", {
+                access: ADMIN,
+                body: { name: "Partner Project Name", scopes: ["products:read"], purpose: "Sync our online shop's catalogue" },
+                notes: "Scopes are products:read, products:create, products:update and products:delete; ask only for what the integration needs. The WARE67 team reviews the request; no key exists until you reveal it.",
             }),
-            ep("DELETE", "/api-keys/{api_key_id}", "Revoke a partner API key", {
-                access: PLATFORM,
-                notes: "Revoking is permanent. Partners using the key get 401 immediately. Revoking a key that is already revoked returns 409.",
+            ep("POST", "/company/api-keys/{api_key_id}/reveal", "Reveal an approved key (once)", {
+                access: ADMIN,
+                notes: "Generates the key and returns it in api_key, exactly once, and fills the API key field above. It works for 90 days from now. Reveal within 7 days of approval or the approval lapses.",
             }),
+            ep("DELETE", "/company/api-keys/{api_key_id}", "Withdraw a request or revoke a key", {
+                access: ADMIN,
+                notes: "Revoking is permanent; partners using the key get 401 immediately. Revoking twice returns 409.",
+            }),
+            ep("GET", "/platform/api-keys", "All keys and requests (status=PENDING is the review queue)", {
+                access: PLATFORM,
+                query: [{ name: "status", hint: "PENDING / APPROVED / ACTIVE / ..." }, { name: "company_id" }, ...PAGE],
+            }),
+            ep("GET", "/platform/api-keys/expiring", "Live keys expiring soon", {
+                access: PLATFORM,
+                query: [{ name: "days", hint: "14 (max 90)" }],
+            }),
+            ep("GET", "/platform/api-keys/{api_key_id}", "One key or request", { access: PLATFORM }),
+            ep("POST", "/platform/api-keys/{api_key_id}/approve", "Approve a request", {
+                access: PLATFORM,
+                body: { scopes: ["products:read"] },
+                notes: "Leave scopes out to grant everything requested, or list fewer. You can't grant scopes that weren't requested.",
+            }),
+            ep("POST", "/platform/api-keys/{api_key_id}/reject", "Reject a request", {
+                access: PLATFORM,
+                body: { reason: "Please request read-only access first." },
+                notes: "The company sees the reason.",
+            }),
+            ep("DELETE", "/platform/api-keys/{api_key_id}", "Revoke any key or request", { access: PLATFORM }),
         ],
     },
     {

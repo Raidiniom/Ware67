@@ -19,7 +19,7 @@ from app.core.security import create_access_token, hash_password
 from app.db.base_class import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.api_key import ApiKey
+from app.models.api_key import ApiKey, ApiKeyStatus
 from app.models.company import Company
 from app.models.user import User, UserRole
 from app.services.api_keys import generate_api_key
@@ -85,16 +85,21 @@ class ApiTestCase(unittest.TestCase):
         return self.add(User(name="Platform Admin", email=email, password=hash_password(PASSWORD),
                              role=UserRole.GUEST, company_id=None, is_platform_admin=True))
 
-    def make_key(self, company_id, created_by, scopes=("products:read",), **fields):
-        """Inserts a key directly and returns (raw_key, key_id)."""
+    def make_key(self, company_id, requested_by, scopes=("products:read",), **fields):
+        """Inserts an already revealed (ACTIVE) key directly, skipping the
+        request/approve/reveal flow, and returns (raw_key, key_id)."""
         raw_key, prefix, key_hash = generate_api_key()
         key_id = self.add(ApiKey(
             company_id=company_id,
             name=fields.pop("name", "Test partner"),
+            status=fields.pop("status", ApiKeyStatus.ACTIVE),
+            requested_scopes=list(scopes),
+            scopes=list(scopes),
             key_prefix=prefix,
             key_hash=key_hash,
-            scopes=list(scopes),
-            created_by=created_by,
+            requested_by=requested_by,
+            revealed_by=requested_by,
+            revealed_at=utcnow(),
             expires_at=fields.pop("expires_at", utcnow() + timedelta(days=30)),
             **fields,
         ))

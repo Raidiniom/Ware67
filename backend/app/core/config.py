@@ -8,8 +8,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Partner API keys get this lifetime by default and can never exceed it.
+    # Partner API keys are valid for this long from the moment they're revealed.
     API_KEY_MAX_TTL_DAYS: int = 90
+    # Days a company has to reveal an approved key before the approval lapses.
+    API_KEY_REVEAL_WINDOW_DAYS: int = 7
+    # Requests a company may have waiting (pending or approved) at once.
+    API_KEY_MAX_OPEN_REQUESTS: int = 5
     # Requests one API key may make per minute before getting 429.
     API_KEY_RATE_LIMIT_PER_MINUTE: int = 120
     # Failed API key attempts per client IP per minute that are audited; past

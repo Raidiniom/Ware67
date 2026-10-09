@@ -304,37 +304,34 @@ replace user JWTs and cannot access the normal user-management endpoints.
 
 ### Getting a key
 
-Keys are issued by the WARE67 platform team to a specific company, and a key
-can only read and change that company's data. The platform team uses:
+A key belongs to one company and can only read and change that company's
+data. Getting one takes three steps:
 
-- `POST /api/v1/api-keys` with a `company_id` — create a key
-- `GET /api/v1/api-keys?company_id=...&skip=0&limit=50` — list key metadata
-- `DELETE /api/v1/api-keys/{id}` — revoke a key
+1. **Request** (your company's `OWNER` or `ADMIN`):
+   `POST /api/v1/company/api-keys`
+   ```json
+   {
+     "name": "Partner Project Name",
+     "scopes": ["products:read", "products:create"],
+     "purpose": "Sync our online shop's catalogue"
+   }
+   ```
+   Ask only for the scopes the integration needs: `products:read`,
+   `products:create`, `products:update`, `products:delete`.
+2. **Approval** by the WARE67 team. They may grant fewer scopes than requested,
+   or reject the request with a reason. Check the status with
+   `GET /api/v1/company/api-keys`.
+3. **Reveal** within 7 days of approval:
+   `POST /api/v1/company/api-keys/{id}/reveal`. This creates the key and returns
+   it in `api_key` **exactly once**. Copy it into your project's server-side
+   environment variables right away; WARE67 keeps only a one-way hash and
+   nobody, including the WARE67 team, can show it again. If it's lost, revoke it
+   and request a new one.
 
-The raw `api_key` value is returned **only once**, in the create response.
-Copy it into your project's server-side environment variables right away;
-WARE67 keeps only a one-way hash and can't show it again. If it's lost, revoke
-it and create a new one.
-
-Keys expire after **90 days** by default, which is also the maximum. To expire
-sooner, pass `expires_at` with a timezone (for example `2026-12-31T00:00:00Z`).
-Create a replacement key before the old one expires, switch your project over,
-then revoke the old key.
-
-Example create body:
-
-```json
-{
-  "company_id": "THE_COMPANY_ID",
-  "name": "Partner Project Name",
-  "scopes": [
-    "products:read",
-    "products:create",
-    "products:update",
-    "products:delete"
-  ]
-}
-```
+Keys work for **90 days** from the moment they're revealed. Request a
+replacement before then, switch your project over, then revoke the old key with
+`DELETE /api/v1/company/api-keys/{id}`. You can also use that to revoke a key
+at any time, for example if it leaks.
 
 ### Partner workflow
 

@@ -83,6 +83,8 @@ below.
 
 ### PR B: API key request → approve → reveal
 
+Status: built on `feat/api-key-requests`.
+
 1. `api_keys` gains `status` (`PENDING`, `APPROVED`, `REJECTED`, `ACTIVE`,
    `REVOKED`, `LAPSED`), requested/approved/revealed by and at, rejection
    reason. Hash and prefix stay empty until reveal.
@@ -99,44 +101,43 @@ below.
 Platform console (companies, key request queue, expiring keys) and the company
 API keys page (request, reveal-once dialog, revoke).
 
-## Migrating existing data
+## Existing data
 
-All current data belongs to one company today. A one-time SQL migration will:
-
-1. Create a company for it (name to be decided).
-2. Set `company_id` on every existing row to that company.
-3. Turn the listed platform team accounts into platform admins (no company).
-4. Make the remaining `ADMIN`s that company's `OWNER`s.
+Decided 2026-10-09, with the team's agreement: **start fresh**. The current
+data is not kept; on deploy day the shared database is rebuilt empty from
+`schema/ware67_schema.sql`, and everyone signs up again.
 
 ## Deploying PR A
 
-Follow README section 5 (Git & Deploy Workflow), with these extras. Members
-and partners are affected from step 3 until step 5, so pick a quiet moment.
+Follow README section 5 (Git & Deploy Workflow), with these extras. The app
+is down from step 3 until step 4 finishes, so pick a quiet moment and tell the
+team first.
 
-1. **Back up the database:** `mysqldump -u DB_USER -p DB_NAME > ware67_before_company_model.sql`.
-   The migration can't be rolled back as a whole.
+1. **Back up the database anyway** (cheap insurance if a step fails):
+   `mysqldump -u DB_USER -p DB_NAME > ware67_before_company_model.sql`
 2. On the server, pull `develop`. No `pip install` or `alembic upgrade` needed.
-3. Run the migration once (from `backend/`):
-   `mysql -u DB_USER -p DB_NAME < schema/company_model_migration.sql`.
-   The last statement prints three counts; all must be 0.
+3. Rebuild the database (from `backend/`). **This deletes every table and all
+   data:**
+   `mysql -u DB_USER -p DB_NAME < schema/ware67_schema.sql`
 4. `pm2 restart ware67-api`, then check `pm2 logs ware67-api --lines 30 --nostream`.
    Deploy the frontend build at the same time: the old register page doesn't
    send a company name, so sign-ups fail until it's updated.
-5. Create the platform team accounts, one per person, each with a real password:
-   `python scripts/create_platform_admin.py --email platform_dev1@ware67.com --name "..."`.
-6. Check: sign in as a former `ADMIN` (now `OWNER` of ware67-inc) and see the
-   usual data; sign in as a platform admin and get the "platform team" dashboard;
-   sign up a test company and confirm it starts empty.
+5. Create the platform team accounts, one per person, each with a real password
+   (not the one used for local testing):
+   `python scripts/create_platform_admin.py --email platform_dev1@ware67.com --name "..."`
+6. Check: sign in as a platform admin and get the "platform team" dashboard;
+   sign up a company and confirm it starts empty; sign up a second one and
+   confirm neither sees the other's products.
+7. Tell the team to pull `develop`: older branches no longer match the database.
 
 ## ⚠️ Risks
 
-- **Shared database.** The schema change can't be applied to the shared DCISM
-  database before deploy: production and teammates' local backends run the old
-  code, and new NOT NULL `company_id` columns would break their inserts.
-  Development needs a separate database (local MySQL/XAMPP, or a second database
-  on DCISM). The automated tests use in-memory SQLite and are unaffected.
+- **Shared database.** Don't rebuild the shared DCISM database before deploy
+  day: production and teammates' local backends run the old code and use it.
+  Develop against a local SQLite file instead (Local_Development_Setup.md,
+  "Working on the company model").
 - **One missed filter leaks data.** That's why scoping goes through one
   dependency and why the cross-company suite covers every endpoint, including
   ones added later.
-- **Breaking API change for partners.** Keys and integrations from before PR A
-  need reissuing anyway (Phase 1 already required this).
+- **Breaking API change for partners.** All existing keys are deleted with the
+  fresh start; partners get new keys afterwards.

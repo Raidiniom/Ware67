@@ -3,17 +3,19 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_platform_admin
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.api_key import ApiKey
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.api_key import ApiKeyCreate, ApiKeyCreated, ApiKeyRead
 from app.services.api_keys import generate_api_key
 from app.services.audit import log_audit
 
+# Issuing and revoking keys is the platform team's job, never a company's.
 router = APIRouter(prefix="/api-keys", tags=["API keys"])
-admin_only = require_roles("ADMIN")
+admin_only = require_platform_admin
 
 
 def _get_key_or_404(api_key_id: str, db: Session) -> ApiKey:
@@ -27,11 +29,15 @@ def _get_key_or_404(api_key_id: str, db: Session) -> ApiKey:
 def list_api_keys(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    company_id: str | None = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(admin_only),
 ):
+    query = db.query(ApiKey)
+    if company_id:
+        query = query.filter(ApiKey.company_id == company_id)
     return (
-        db.query(ApiKey)
+        query
         .order_by(ApiKey.created_at.desc(), ApiKey.id)
         .offset(skip)
         .limit(limit)
@@ -56,6 +62,12 @@ def create_api_key(
     db: Session = Depends(get_db),
     admin: User = Depends(admin_only),
 ):
+    company = db.get(Company, payload.company_id)
+    if company is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Company not found")
+    if not company.is_active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Company is deactivated")
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     max_expires_at = now + timedelta(days=settings.API_KEY_MAX_TTL_DAYS)
     if payload.expires_at is None:
@@ -73,6 +85,7 @@ def create_api_key(
     raw_key, key_prefix, key_hash = _generate_unused_key(db)
 
     api_key = ApiKey(
+        company_id=company.id,
         name=payload.name,
         key_prefix=key_prefix,
         key_hash=key_hash,
@@ -88,6 +101,7 @@ def create_api_key(
         action="CREATE",
         entity="API_KEY",
         entity_id=api_key.id,
+        company_id=company.id,   # shows in that company's audit log too
         details={"name": api_key.name, "key_prefix": key_prefix, "scopes": api_key.scopes},
         request=request,
     )
@@ -119,6 +133,7 @@ def revoke_api_key(
         action="REVOKE",
         entity="API_KEY",
         entity_id=api_key.id,
+        company_id=api_key.company_id,
         details={"name": api_key.name, "key_prefix": api_key.key_prefix},
         request=request,
     )

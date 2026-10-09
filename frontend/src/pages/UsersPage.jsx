@@ -5,7 +5,6 @@ import {
     listManagedUsers,
     listRoles,
     updateManagedUser,
-    updateRoleDescription,
 } from "../api/management"
 import { errorMessage } from "../api/resources"
 import { useAuth } from "../context/AuthContext"
@@ -17,14 +16,27 @@ import "../components/styles/Resource.css"
 import "../components/styles/Ledger.css"
 import "./styles/UsersPage.css"
 
-const ROLES = ["GUEST", "STAFF", "MANAGER", "ADMIN"]
-const PRIVILEGED = ["ADMIN", "MANAGER"]
+const ROLES = ["GUEST", "STAFF", "MANAGER", "ADMIN", "OWNER"]
+const USER_MANAGERS = ["OWNER", "ADMIN", "MANAGER"]
 const EMPTY_FORM = { name: "", email: "", password: "", role: "GUEST", is_active: true }
 
-// Managers can only hand out (or touch) non-privileged roles.
-const assignableRoles = (isAdmin) => ROLES.filter((role) => isAdmin || !PRIVILEGED.includes(role))
+// Mirrors backend/app/services/user_permissions.py: owners hand out any role,
+// admins any but owner, managers only staff and guest.
+function assignableRoles(actorRole) {
+    if (actorRole === "OWNER") return ROLES
+    if (actorRole === "ADMIN") return ROLES.filter((role) => role !== "OWNER")
+    return ["GUEST", "STAFF"]
+}
 
-function UserForm({ isAdmin, onSaved, onCancel }) {
+// Who may change whose account: owners anyone, admins anyone but owners,
+// managers only staff and guests.
+function canManage(actorRole, targetRole) {
+    if (actorRole === "OWNER") return true
+    if (actorRole === "ADMIN") return targetRole !== "OWNER"
+    return targetRole === "GUEST" || targetRole === "STAFF"
+}
+
+function UserForm({ actorRole, onSaved, onCancel }) {
     const [form, setForm] = useState(EMPTY_FORM)
     const [error, setError] = useState("")
     const [saving, setSaving] = useState(false)
@@ -86,7 +98,7 @@ function UserForm({ isAdmin, onSaved, onCancel }) {
                 <label className="field field--half">
                     <span>Role</span>
                     <select value={form.role} onChange={set("role")}>
-                        {assignableRoles(isAdmin).map((role) => (
+                        {assignableRoles(actorRole).map((role) => (
                             <option key={role} value={role}>
                                 {role}
                             </option>
@@ -174,17 +186,9 @@ function ResetPasswordForm({ user, onSaved, onCancel }) {
     )
 }
 
-function RoleCard({ role, editable, onSave }) {
-    const [description, setDescription] = useState(role.description || "")
-    const [saving, setSaving] = useState(false)
-    const dirty = description !== (role.description || "")
-
-    async function save() {
-        setSaving(true)
-        await onSave(role, description)
-        setSaving(false)
-    }
-
+// Role descriptions are shared by every company, so only the WARE67 platform
+// team can edit them; companies see them read-only.
+function RoleCard({ role }) {
     return (
         <article className="role-card">
             <div className="role-card-heading">
@@ -195,27 +199,19 @@ function RoleCard({ role, editable, onSave }) {
                 </div>
             </div>
             <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={!editable}
+                value={role.description || ""}
+                disabled
                 rows={3}
-                maxLength={1000}
                 aria-label={`${role.name} description`}
             />
             <div className="role-card-footer">
-                {editable ? (
-                    <button className="btn btn-outline btn-sm" type="button" onClick={save} disabled={!dirty || saving}>
-                        {saving ? "Saving…" : "Save description"}
-                    </button>
-                ) : (
-                    <span>Only administrators can edit role details.</span>
-                )}
+                <span>Role descriptions are managed by the WARE67 team.</span>
             </div>
         </article>
     )
 }
 
-function UsersManager({ isAdmin, currentUserId }) {
+function UsersManager({ actorRole, currentUserId }) {
     const [activeTab, setActiveTab] = useState("users")
     const [users, setUsers] = useState([])
     const [roles, setRoles] = useState([])
@@ -272,18 +268,7 @@ function UsersManager({ isAdmin, currentUserId }) {
         setDeactivating(null)
     }
 
-    async function saveRole(role, description) {
-        setError("")
-        try {
-            const updated = await updateRoleDescription(role.name, description)
-            setRoles((current) => current.map((item) => (item.name === updated.name ? updated : item)))
-            setToast("Role updated")
-        } catch (err) {
-            setError(errorMessage(err))
-        }
-    }
-
-    const options = assignableRoles(isAdmin)
+    const options = assignableRoles(actorRole)
 
     const columns = [
         {
@@ -303,7 +288,7 @@ function UsersManager({ isAdmin, currentUserId }) {
             key: "role",
             header: "Role",
             render: (u) => {
-                const locked = !isAdmin && PRIVILEGED.includes(u.role)
+                const locked = !canManage(actorRole, u.role)
                 return (
                     <select
                         className="role-select"
@@ -378,7 +363,7 @@ function UsersManager({ isAdmin, currentUserId }) {
                             <button
                                 className="btn btn-ghost btn-sm"
                                 type="button"
-                                disabled={!isAdmin && PRIVILEGED.includes(u.role)}
+                                disabled={!canManage(actorRole, u.role)}
                                 onClick={() => setResetting(u)}
                             >
                                 Reset password
@@ -387,7 +372,7 @@ function UsersManager({ isAdmin, currentUserId }) {
                                 <button
                                     className="btn btn-danger btn-sm"
                                     type="button"
-                                    disabled={u.id === currentUserId || (!isAdmin && PRIVILEGED.includes(u.role))}
+                                    disabled={u.id === currentUserId || !canManage(actorRole, u.role)}
                                     onClick={() => setDeactivating(u)}
                                 >
                                     Deactivate
@@ -396,7 +381,7 @@ function UsersManager({ isAdmin, currentUserId }) {
                                 <button
                                     className="btn btn-ghost btn-sm"
                                     type="button"
-                                    disabled={!isAdmin && PRIVILEGED.includes(u.role)}
+                                    disabled={!canManage(actorRole, u.role)}
                                     onClick={() => changeUser(u.id, { is_active: true }, "Account activated")}
                                 >
                                     Activate
@@ -412,14 +397,14 @@ function UsersManager({ isAdmin, currentUserId }) {
             ) : (
                 <section className="roles-grid">
                     {roles.map((role) => (
-                        <RoleCard key={role.id} role={role} editable={isAdmin} onSave={saveRole} />
+                        <RoleCard key={role.id} role={role} />
                     ))}
                 </section>
             )}
 
             {creating && (
                 <UserForm
-                    isAdmin={isAdmin}
+                    actorRole={actorRole}
                     onCancel={() => setCreating(false)}
                     onSaved={() => {
                         setCreating(false)
@@ -465,15 +450,15 @@ function UsersManager({ isAdmin, currentUserId }) {
 export default function UsersPage() {
     const { user } = useAuth()
 
-    if (!user || !PRIVILEGED.includes(user.role)) {
+    if (!user || !USER_MANAGERS.includes(user.role)) {
         return (
             <PageShell title="Users & roles" subtitle="Control warehouse access.">
                 <div className="table-wrap">
-                    <div className="table-state">Only administrators and managers can manage users.</div>
+                    <div className="table-state">Only owners, administrators and managers can manage users.</div>
                 </div>
             </PageShell>
         )
     }
 
-    return <UsersManager isAdmin={user.role === "ADMIN"} currentUserId={user.id} />
+    return <UsersManager actorRole={user.role} currentUserId={user.id} />
 }

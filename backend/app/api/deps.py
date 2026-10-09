@@ -8,7 +8,8 @@ from jose import JWTError
 from app.core.config import settings
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models.user import User
+from app.models.company import Company
+from app.models.user import User, UserRole
 from app.models.api_key import ApiKey
 from app.services.api_keys import extract_key_prefix, verify_api_key
 from app.services.audit import client_ip, log_action
@@ -40,12 +41,38 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def get_current_member(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """A signed-in user acting inside their company. Every route that touches
+    company data depends on this (directly or via require_roles) and filters
+    by the returned user's company_id. Platform admins are refused: the
+    platform team manages companies and keys but never sees inventory."""
+    if current_user.is_platform_admin or current_user.company_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This area is only for company accounts")
+    company = db.get(Company, current_user.company_id)
+    if company is None or not company.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your company's account has been deactivated")
+    return current_user
+
+
 def require_roles(*roles: str):
-    def wrapper(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role.value not in roles:
+    """Company roles allowed on a route. OWNER can always do what ADMIN can,
+    so routes only need to name "ADMIN"."""
+    allowed = set(roles) | ({UserRole.OWNER.value} if UserRole.ADMIN.value in roles else set())
+
+    def wrapper(current_user: User = Depends(get_current_member)) -> User:
+        if current_user.role.value not in allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
         return current_user
     return wrapper
+
+
+def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_platform_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the WARE67 platform team can do this")
+    return current_user
 
 
 # last_used_at only needs to be roughly right; writing it on every request
@@ -73,7 +100,7 @@ def _reject_api_key(
     reason: str,
     *,
     key_prefix: str | None = None,
-    api_key_id: str | None = None,
+    api_key: ApiKey | None = None,
     detail: str = "Invalid or missing API key",
 ) -> HTTPException:
     """Audits a failed attempt and returns the exception to raise. Only the
@@ -87,7 +114,8 @@ def _reject_api_key(
             db,
             action="API_KEY_AUTH_FAILED",
             entity="API_KEY",
-            entity_id=api_key_id,
+            entity_id=api_key.id if api_key else None,
+            company_id=api_key.company_id if api_key else None,
             details={"reason": reason, "key_prefix": key_prefix},
             request=request,
         )
@@ -111,17 +139,20 @@ def get_current_api_key(
     if api_key is None:
         raise _reject_api_key(db, request, "unknown", key_prefix=key_prefix)
     if not verify_api_key(raw_key, api_key.key_hash):
-        raise _reject_api_key(db, request, "bad_secret", key_prefix=key_prefix, api_key_id=api_key.id)
+        raise _reject_api_key(db, request, "bad_secret", key_prefix=key_prefix, api_key=api_key)
     # Revoked and expired are only distinguished after the secret matched, so
     # they reveal nothing to someone who doesn't hold the key.
     if not api_key.is_active:
-        raise _reject_api_key(db, request, "revoked", key_prefix=key_prefix, api_key_id=api_key.id)
+        raise _reject_api_key(db, request, "revoked", key_prefix=key_prefix, api_key=api_key)
+    company = db.get(Company, api_key.company_id)
+    if company is None or not company.is_active:
+        raise _reject_api_key(db, request, "company_inactive", key_prefix=key_prefix, api_key=api_key)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if api_key.expires_at is not None and api_key.expires_at <= now:
         raise _reject_api_key(
             db, request, "expired",
-            key_prefix=key_prefix, api_key_id=api_key.id, detail="API key has expired",
+            key_prefix=key_prefix, api_key=api_key, detail="API key has expired",
         )
 
     retry_after = api_key_limiter.hit(api_key.id)

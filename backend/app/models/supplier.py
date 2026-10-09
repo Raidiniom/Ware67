@@ -2,12 +2,14 @@ import uuid
 from sqlalchemy import Column, String, Text, DateTime
 from sqlalchemy.sql import func
 from app.db.base_class import Base
+from app.models.tenant import company_id_column
 
 
 class Supplier(Base):
     __tablename__ = "suppliers"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = company_id_column()
     name = Column(String(150), nullable=False)
     contact_person = Column(String(150))
     contact_number = Column(String(50))

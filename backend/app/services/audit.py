@@ -2,6 +2,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.audit_log import AuditLog
+from app.models.user import User
 
 
 def client_ip(request: Request) -> str | None:
@@ -22,18 +23,28 @@ def client_ip(request: Request) -> str | None:
 
 
 def log_action(db: Session, *, user_id=None, action, entity, entity_id=None,
-               details=None, request: Request | None = None) -> None:
+               details=None, request: Request | None = None, company_id=None) -> None:
     """Adds an audit row to the caller's session. Does NOT commit, so the
-    audit entry is atomic with the change it describes."""
+    audit entry is atomic with the change it describes.
+
+    company_id decides which company's audit log shows the row. When it isn't
+    given it's taken from the acting user (platform admins have none). Pass it
+    explicitly when there is no user, e.g. for partner API key actions."""
+    if company_id is None and user_id is not None:
+        # The acting user is already in this session, so this is normally a
+        # cache hit rather than a query.
+        actor = db.get(User, user_id)
+        company_id = actor.company_id if actor else None
     db.add(AuditLog(
-        user_id=user_id, action=action, entity=entity, entity_id=entity_id,
-        details=details, ip_address=client_ip(request) if request else None,
+        company_id=company_id, user_id=user_id, action=action, entity=entity,
+        entity_id=entity_id, details=details,
+        ip_address=client_ip(request) if request else None,
     ))
 
 
 def log_audit(db: Session, action: str | None = None, entity: str | None = None,
               entity_id=None, details=None, request: Request | None = None,
-              user=None, user_id=None, **kwargs) -> None:
+              user=None, user_id=None, company_id=None, **kwargs) -> None:
     """Compatibility wrapper: accepts either `user=<User>` or `user_id=<str>`,
     and positional or keyword action/entity."""
     if user_id is None and user is not None:
@@ -46,4 +57,5 @@ def log_audit(db: Session, action: str | None = None, entity: str | None = None,
         entity_id=entity_id,
         details=details,
         request=request,
+        company_id=company_id,
     )

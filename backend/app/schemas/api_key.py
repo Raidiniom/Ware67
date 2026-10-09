@@ -12,6 +12,7 @@ ApiKeyScope = Literal[
 
 
 class ApiKeyCreate(BaseModel):
+    company_id: str = Field(min_length=1, max_length=36)
     name: str = Field(min_length=1, max_length=150)
     scopes: list[ApiKeyScope] = Field(default_factory=lambda: ["products:read"], min_length=1)
     expires_at: datetime | None = None
@@ -43,6 +44,7 @@ class ApiKeyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    company_id: str
     name: str
     key_prefix: str
     scopes: list[str]

@@ -47,6 +47,7 @@ class ApiKeyRequirementsTests(unittest.TestCase):
 
     def test_product_write_scopes_are_supported(self):
         payload = ApiKeyCreate(
+            company_id="company-1",
             name="Full product integration",
             scopes=[
                 "products:read",
@@ -68,6 +69,7 @@ class ApiKeyRequirementsTests(unittest.TestCase):
 
     def test_duplicate_scopes_are_removed(self):
         payload = ApiKeyCreate(
+            company_id="company-1",
             name="Read integration",
             scopes=["products:read", "products:read"],
         )

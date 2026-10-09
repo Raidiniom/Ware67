@@ -4,108 +4,42 @@ Runs the real FastAPI app against an in-memory SQLite database, so no
 tunnel or shared MySQL is needed:  python -m unittest discover -s tests
 """
 import hashlib
-import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-# Only used when no backend/.env is present (e.g. running this file alone in CI).
-os.environ.setdefault("DATABASE_URL", "sqlite://")
-os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
-
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
-import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.api import deps
 from app.core.config import settings
-from app.core.security import create_access_token, hash_password
-from app.db.base_class import Base
-from app.db.session import get_db
-from app.main import app
 from app.models.api_key import ApiKey
 from app.models.audit_log import AuditLog
 from app.models.product import Product
-from app.models.user import User, UserRole
+from app.models.user import UserRole
 from app.services.api_keys import generate_api_key, hash_api_key
 from app.services.audit import client_ip
 from app.services.rate_limit import FixedWindowLimiter
+from support import ApiTestCase, utcnow
 
 PRODUCTS = "/api/v1/integration/products"
 API_KEYS = "/api/v1/api-keys"
 
 
-def utcnow():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-class ApiKeyTestCase(unittest.TestCase):
+class ApiKeyTestCase(ApiTestCase):
     def setUp(self):
-        engine = create_engine(
-            "sqlite://",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-        Base.metadata.create_all(engine)
-        self.Session = sessionmaker(bind=engine)
-
-        def override_get_db():
-            db = self.Session()
-            try:
-                yield db
-            except Exception:
-                db.rollback()
-                raise
-            finally:
-                db.close()
-
-        app.dependency_overrides[get_db] = override_get_db
-        self.addCleanup(app.dependency_overrides.clear)
-        self.client = TestClient(app)
-
-        # The limiters are module-level, so counts would leak between tests.
-        deps.api_key_limiter.reset()
-        deps.failed_attempt_limiter.reset()
-        self.addCleanup(deps.api_key_limiter.reset)
-        self.addCleanup(deps.failed_attempt_limiter.reset)
-
-        db = self.Session()
-        admin = User(
-            name="Admin User",
-            email="admin@example.com",
-            password=hash_password("Original123"),
-            role=UserRole.ADMIN,
-        )
-        db.add(admin)
-        db.add(Product(sku="SKU-1", name="Widget", current_stock=10))
-        db.commit()
-        self.admin_id = admin.id
-        db.close()
+        super().setUp()
+        self.company_id = self.make_company()
+        self.owner_id = self.make_user(self.company_id, UserRole.OWNER)
+        # Keys are issued by the platform team.
+        self.admin_id = self.make_platform_admin()
+        self.add(Product(company_id=self.company_id, sku="SKU-1", name="Widget", current_stock=10))
 
     def admin_auth(self):
-        return {"Authorization": f"Bearer {create_access_token(self.admin_id, 'ADMIN')}"}
+        return self.auth(self.admin_id)
 
     def make_key(self, scopes=("products:read",), **fields):
-        """Inserts a key directly and returns (raw_key, key_id)."""
-        raw_key, prefix, key_hash = generate_api_key()
-        db = self.Session()
-        api_key = ApiKey(
-            name="Test partner",
-            key_prefix=prefix,
-            key_hash=key_hash,
-            scopes=list(scopes),
-            created_by=self.admin_id,
-            expires_at=fields.pop("expires_at", utcnow() + timedelta(days=30)),
-            **fields,
-        )
-        db.add(api_key)
-        db.commit()
-        key_id = api_key.id
-        db.close()
-        return raw_key, key_id
+        """Inserts a key for this test's company and returns (raw_key, key_id)."""
+        return super().make_key(self.company_id, self.admin_id, scopes, **fields)
 
     def get_key(self, key_id):
         db = self.Session()
@@ -236,7 +170,8 @@ class ApiKeyRateLimitTests(ApiKeyTestCase):
 
 class ApiKeyIssuingTests(ApiKeyTestCase):
     def create(self, **body):
-        return self.client.post(API_KEYS, headers=self.admin_auth(), json={"name": "Partner", **body})
+        return self.client.post(API_KEYS, headers=self.admin_auth(),
+                                json={"company_id": self.company_id, "name": "Partner", **body})
 
     def test_issued_key_works_and_is_stored_as_sha256(self):
         response = self.create(scopes=["products:read"])
@@ -291,8 +226,8 @@ class ApiKeyIssuingTests(ApiKeyTestCase):
     def test_prefix_collision_is_retried(self):
         taken_raw, taken_prefix, taken_hash = generate_api_key()
         db = self.Session()
-        db.add(ApiKey(name="Old", key_prefix=taken_prefix, key_hash=taken_hash,
-                      scopes=["products:read"], created_by=self.admin_id))
+        db.add(ApiKey(company_id=self.company_id, name="Old", key_prefix=taken_prefix,
+                      key_hash=taken_hash, scopes=["products:read"], created_by=self.admin_id))
         db.commit()
         db.close()
 

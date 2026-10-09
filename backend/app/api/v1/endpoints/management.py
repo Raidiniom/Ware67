@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_platform_admin, require_roles
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.role import Role
@@ -10,9 +10,11 @@ from app.models.user import User, UserRole
 from app.schemas.auth import UserRead
 from app.schemas.management import RoleRead, RoleUpdate, UserCreate, UserUpdate
 from app.services.audit import log_audit
-from app.services.user_permissions import ensure_can_change_user
+from app.services.tenancy import get_owned_or_404
+from app.services.user_permissions import ensure_can_assign_role, ensure_can_change_user
 
 router = APIRouter(tags=["user-management"])
+user_managers = require_roles("ADMIN", "MANAGER")
 
 
 def _role_value(value: str) -> UserRole:
@@ -41,9 +43,12 @@ def _set_user_role(db: Session, user: User, role_value: str) -> None:
 @router.get("/users", response_model=list[UserRead])
 def list_managed_users(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
+    current_user: User = Depends(user_managers),
 ):
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    users = (db.query(User)
+             .filter(User.company_id == current_user.company_id)
+             .order_by(User.created_at.desc())
+             .all())
     for user in users:
         if user.role_id is None:
             _set_user_role(db, user, user.role.value)
@@ -56,20 +61,20 @@ def create_managed_user(
     payload: UserCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
+    current_user: User = Depends(user_managers),
 ):
     email = payload.email.lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     role = _role_value(payload.role)
-    if current_user.role == UserRole.MANAGER and role in (UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(status_code=403, detail="Managers can only create staff accounts")
+    ensure_can_assign_role(current_user, role)
 
     user = User(
         name=payload.name,
         email=email,
         password=hash_password(payload.password),
         is_active=payload.is_active,
+        company_id=current_user.company_id,   # always the creator's own company
     )
     db.add(user)
     _set_user_role(db, user, role.value)
@@ -87,11 +92,9 @@ def update_managed_user(
     payload: UserUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
+    current_user: User = Depends(user_managers),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = get_owned_or_404(db, User, user_id, current_user.company_id, "User")
 
     changes = payload.model_dump(exclude_unset=True)
     requested_role = changes.pop("role", None)
@@ -124,7 +127,7 @@ def update_managed_user(
 @router.get("/roles", response_model=list[RoleRead])
 def list_roles(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("ADMIN", "MANAGER")),
+    _current_user: User = Depends(user_managers),
 ):
     for role in UserRole:
         _get_or_create_role(db, role)
@@ -132,13 +135,14 @@ def list_roles(
     return db.query(Role).order_by(Role.name.asc()).all()
 
 
+# Role descriptions are shown to every company, so only the platform team edits them.
 @router.patch("/roles/{role_name}", response_model=RoleRead)
 def update_role_description(
     role_name: str,
     payload: RoleUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN")),
+    current_user: User = Depends(require_platform_admin),
 ):
     role = _role_value(role_name)
     record = _get_or_create_role(db, role)

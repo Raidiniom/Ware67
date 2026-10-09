@@ -17,6 +17,7 @@ from app.schemas.location import LocationRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.schemas.supplier import SupplierRead
 from app.services.audit import log_audit
+from app.services.tenancy import ensure_product_refs, get_owned_or_404
 
 router = APIRouter(prefix="/integration", tags=["Partner integration"])
 products_reader = require_api_key_scope("products:read")
@@ -24,37 +25,35 @@ products_creator = require_api_key_scope("products:create")
 products_updater = require_api_key_scope("products:update")
 products_deleter = require_api_key_scope("products:delete")
 
-REFS = (
-    ("category_id", Category, "Category"),
-    ("supplier_id", Supplier, "Supplier"),
-    ("location_id", Location, "Location"),
-)
+# Every query here is limited to the key's own company (api_key.company_id).
 
 
-def _get_product_or_404(product_id: str, db: Session) -> Product:
-    product = db.get(Product, product_id)
-    if product is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
-    return product
+def _get_product_or_404(product_id: str, db: Session, company_id: str) -> Product:
+    return get_owned_or_404(db, Product, product_id, company_id, "Product")
 
 
-def _ensure_unique_sku(sku: str, db: Session, product_id: str | None = None) -> None:
-    query = db.query(Product).filter(Product.sku == sku)
+def _ensure_unique_sku(sku: str, db: Session, company_id: str, product_id: str | None = None) -> None:
+    query = db.query(Product).filter(Product.company_id == company_id, Product.sku == sku)
     if product_id is not None:
         query = query.filter(Product.id != product_id)
     if query.first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "A product with this SKU already exists")
 
 
-def _ensure_refs(db: Session, data: dict) -> None:
-    for field, model, label in REFS:
-        ref = data.get(field)
-        if ref is not None and db.get(model, ref) is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{label} not found")
-
-
-def _partner_audit_details(api_key: ApiKey, details: dict) -> dict:
-    return {**details, "api_key_id": api_key.id, "api_key_name": api_key.name}
+def _partner_audit(db: Session, api_key: ApiKey, request: Request, *, action: str, entity: str,
+                   entity_id: str, details: dict) -> None:
+    """Partner actions are recorded against the company and the key, not
+    against a person: no user acted, an integration did."""
+    log_audit(
+        db,
+        user_id=None,
+        company_id=api_key.company_id,
+        action=action,
+        entity=entity,
+        entity_id=entity_id,
+        details={**details, "api_key_id": api_key.id, "api_key_name": api_key.name},
+        request=request,
+    )
 
 
 @router.get("/products", response_model=list[ProductRead])
@@ -67,9 +66,9 @@ def list_partner_products(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=200),
     db: Session = Depends(get_db),
-    _api_key: ApiKey = Depends(products_reader),
+    api_key: ApiKey = Depends(products_reader),
 ):
-    query = db.query(Product)
+    query = db.query(Product).filter(Product.company_id == api_key.company_id)
     if search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Product.sku.ilike(term), Product.name.ilike(term)))
@@ -88,9 +87,9 @@ def list_partner_products(
 def get_partner_product(
     product_id: str,
     db: Session = Depends(get_db),
-    _api_key: ApiKey = Depends(products_reader),
+    api_key: ApiKey = Depends(products_reader),
 ):
-    return _get_product_or_404(product_id, db)
+    return _get_product_or_404(product_id, db, api_key.company_id)
 
 
 @router.post("/products", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
@@ -103,26 +102,21 @@ def create_partner_product(
     data = payload.model_dump()
     initial_stock = data.pop("initial_stock", 0) or 0
     data.pop("current_stock", None)
-    _ensure_unique_sku(data["sku"], db)
-    _ensure_refs(db, data)
+    company_id = api_key.company_id
+    _ensure_unique_sku(data["sku"], db, company_id)
+    ensure_product_refs(db, data, company_id)
 
-    product = Product(**data, current_stock=initial_stock)
+    product = Product(**data, company_id=company_id, current_stock=initial_stock)
     db.add(product)
     db.flush()
-    log_audit(
-        db,
-        user_id=api_key.created_by,
-        action="CREATE",
-        entity="PRODUCT",
-        entity_id=product.id,
-        details=_partner_audit_details(api_key, {"sku": product.sku, "name": product.name}),
-        request=request,
-    )
+    _partner_audit(db, api_key, request, action="CREATE", entity="PRODUCT", entity_id=product.id,
+                   details={"sku": product.sku, "name": product.name})
 
     if initial_stock > 0:
         txn = Transaction(
+            company_id=company_id,
             product_id=product.id,
-            user_id=api_key.created_by,
+            api_key_id=api_key.id,
             type="STOCK_IN",
             quantity=initial_stock,
             reference_type="INITIAL",
@@ -130,23 +124,15 @@ def create_partner_product(
         )
         db.add(txn)
         db.flush()
-        log_audit(
-            db,
-            user_id=api_key.created_by,
-            action="STOCK_IN",
-            entity="TRANSACTION",
-            entity_id=txn.id,
-            details=_partner_audit_details(
-                api_key,
-                {
-                    "product_id": product.id,
-                    "quantity": initial_stock,
-                    "previous_value": 0,
-                    "new_value": initial_stock,
-                    "reference_type": "INITIAL",
-                },
-            ),
-            request=request,
+        _partner_audit(
+            db, api_key, request, action="STOCK_IN", entity="TRANSACTION", entity_id=txn.id,
+            details={
+                "product_id": product.id,
+                "quantity": initial_stock,
+                "previous_value": 0,
+                "new_value": initial_stock,
+                "reference_type": "INITIAL",
+            },
         )
     try:
         db.commit()
@@ -165,7 +151,8 @@ def update_partner_product(
     db: Session = Depends(get_db),
     api_key: ApiKey = Depends(products_updater),
 ):
-    product = _get_product_or_404(product_id, db)
+    company_id = api_key.company_id
+    product = _get_product_or_404(product_id, db, company_id)
     changes = payload.model_dump(exclude_unset=True)
 
     for field in ("sku", "name", "price", "reorder_level"):
@@ -173,29 +160,17 @@ def update_partner_product(
             changes.pop(field)
 
     if changes.get("sku") is not None:
-        _ensure_unique_sku(changes["sku"], db, product_id=product.id)
-    _ensure_refs(db, changes)
+        _ensure_unique_sku(changes["sku"], db, company_id, product_id=product.id)
+    ensure_product_refs(db, changes, company_id)
 
     before = {field: getattr(product, field) for field in changes}
     for field, value in changes.items():
         setattr(product, field, value)
-    log_audit(
-        db,
-        user_id=api_key.created_by,
-        action="UPDATE",
-        entity="PRODUCT",
-        entity_id=product.id,
-        details=_partner_audit_details(
-            api_key,
-            jsonable_encoder(
-                {
-                    "changed_fields": sorted(changes),
-                    "previous_value": before,
-                    "new_value": changes,
-                }
-            ),
+    _partner_audit(
+        db, api_key, request, action="UPDATE", entity="PRODUCT", entity_id=product.id,
+        details=jsonable_encoder(
+            {"changed_fields": sorted(changes), "previous_value": before, "new_value": changes}
         ),
-        request=request,
     )
     try:
         db.commit()
@@ -213,16 +188,9 @@ def delete_partner_product(
     db: Session = Depends(get_db),
     api_key: ApiKey = Depends(products_deleter),
 ):
-    product = _get_product_or_404(product_id, db)
-    log_audit(
-        db,
-        user_id=api_key.created_by,
-        action="DELETE",
-        entity="PRODUCT",
-        entity_id=product.id,
-        details=_partner_audit_details(api_key, {"sku": product.sku, "name": product.name}),
-        request=request,
-    )
+    product = _get_product_or_404(product_id, db, api_key.company_id)
+    _partner_audit(db, api_key, request, action="DELETE", entity="PRODUCT", entity_id=product.id,
+                   details={"sku": product.sku, "name": product.name})
     db.delete(product)
     try:
         db.commit()
@@ -238,22 +206,25 @@ def delete_partner_product(
 @router.get("/categories", response_model=list[CategoryRead])
 def list_partner_categories(
     db: Session = Depends(get_db),
-    _api_key: ApiKey = Depends(products_reader),
+    api_key: ApiKey = Depends(products_reader),
 ):
-    return db.query(Category).order_by(Category.name.asc()).all()
+    return (db.query(Category).filter(Category.company_id == api_key.company_id)
+            .order_by(Category.name.asc()).all())
 
 
 @router.get("/suppliers", response_model=list[SupplierRead])
 def list_partner_suppliers(
     db: Session = Depends(get_db),
-    _api_key: ApiKey = Depends(products_reader),
+    api_key: ApiKey = Depends(products_reader),
 ):
-    return db.query(Supplier).order_by(Supplier.name.asc()).all()
+    return (db.query(Supplier).filter(Supplier.company_id == api_key.company_id)
+            .order_by(Supplier.name.asc()).all())
 
 
 @router.get("/locations", response_model=list[LocationRead])
 def list_partner_locations(
     db: Session = Depends(get_db),
-    _api_key: ApiKey = Depends(products_reader),
+    api_key: ApiKey = Depends(products_reader),
 ):
-    return db.query(Location).order_by(Location.name.asc()).all()
+    return (db.query(Location).filter(Location.company_id == api_key.company_id)
+            .order_by(Location.name.asc()).all())

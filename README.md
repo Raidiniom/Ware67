@@ -109,23 +109,25 @@ The application registers its shared exception handlers in
    from fastapi import APIRouter, Depends, HTTPException
    from sqlalchemy.orm import Session
    from app.db.session import get_db
-   from app.api.deps import get_current_user, require_roles
+   from app.api.deps import get_current_member, require_roles
    from app.models.product import Product
+   from app.models.user import User
    from app.schemas.product import ProductCreate, ProductRead
 
    router = APIRouter(prefix="/products", tags=["products"])
 
    @router.get("", response_model=list[ProductRead])
-   def list_products(db: Session = Depends(get_db), _=Depends(get_current_user)):
-       return db.query(Product).all()
+   def list_products(db: Session = Depends(get_db), user: User = Depends(get_current_member)):
+       # ALWAYS filter by the caller's company, see 3.4
+       return db.query(Product).filter(Product.company_id == user.company_id).all()
 
    @router.post("", response_model=ProductRead, status_code=201)
    def create_product(
        payload: ProductCreate,
        db: Session = Depends(get_db),
-       _=Depends(require_roles("ADMIN", "MANAGER")),
+       user: User = Depends(require_roles("ADMIN", "MANAGER")),
    ):
-       product = Product(**payload.model_dump())
+       product = Product(**payload.model_dump(), company_id=user.company_id)
        db.add(product)
        db.commit()
        db.refresh(product)
@@ -138,11 +140,28 @@ The application registers its shared exception handlers in
    api_router.include_router(products.router)
    ```
 
-### 3.4 Protecting routes
+### 3.4 Protecting routes and keeping companies apart
 
-- Any logged-in user: `Depends(get_current_user)`
-- Restricted to specific roles: `Depends(require_roles("ADMIN"))` or `Depends(require_roles("ADMIN", "MANAGER"))`
-- Public (no auth): just don't add either dependency
+Every company only ever sees its own data. A single query without a
+`company_id` filter leaks one company's data to another, so for any route that
+touches company data:
+
+- Depend on `get_current_member` (any member) or `require_roles(...)` (specific
+  roles; `OWNER` is allowed wherever `ADMIN` is). Both reject platform admins and
+  deactivated companies. Don't use `get_current_user` for company data.
+- Filter every query by `user.company_id`, and set `company_id` on every new row.
+- Look rows up by id with `get_owned_or_404` from `app/services/tenancy.py`, so
+  another company's id returns 404.
+- Add the route to `ROUTE_CLASSIFICATION` in `tests/test_company_isolation.py`
+  and add a test where company B tries to reach company A's row. The test
+  suite fails until every route is classified.
+
+Other cases:
+
+- Platform team only (companies, API keys): `Depends(require_platform_admin)`
+- Partner API key routes: `Depends(require_api_key_scope("..."))`, then filter
+  by `api_key.company_id`
+- Public (no auth): just don't add any of these dependencies
 
 ### 3.5 ⚠️ Gotcha: model relationships and circular imports
 
@@ -285,10 +304,11 @@ replace user JWTs and cannot access the normal user-management endpoints.
 
 ### Getting a key
 
-An authenticated `ADMIN` manages keys through:
+Keys are issued by the WARE67 platform team to a specific company, and a key
+can only read and change that company's data. The platform team uses:
 
-- `POST /api/v1/api-keys` — create a key
-- `GET /api/v1/api-keys?skip=0&limit=50` — list key metadata
+- `POST /api/v1/api-keys` with a `company_id` — create a key
+- `GET /api/v1/api-keys?company_id=...&skip=0&limit=50` — list key metadata
 - `DELETE /api/v1/api-keys/{id}` — revoke a key
 
 The raw `api_key` value is returned **only once**, in the create response.
@@ -305,6 +325,7 @@ Example create body:
 
 ```json
 {
+  "company_id": "THE_COMPANY_ID",
   "name": "Partner Project Name",
   "scopes": [
     "products:read",

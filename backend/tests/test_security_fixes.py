@@ -3,80 +3,33 @@
 Runs the real FastAPI app against an in-memory SQLite database, so no
 tunnel or shared MySQL is needed:  python -m unittest discover -s tests
 """
-import os
 import unittest
 
-# Only used when no backend/.env is present (e.g. running this file alone in CI).
-os.environ.setdefault("DATABASE_URL", "sqlite://")
-os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
-
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.core.config import Settings
-from app.core.security import create_access_token, hash_password, verify_password
-from app.db.base_class import Base
-from app.db.session import get_db
-from app.main import app
+from app.core.security import verify_password
 from app.models.product import Product
 from app.models.user import User, UserRole
+from support import ApiTestCase
 
 
-class SecurityFixTests(unittest.TestCase):
+class SecurityFixTests(ApiTestCase):
     def setUp(self):
-        engine = create_engine(
-            "sqlite://",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-        Base.metadata.create_all(engine)
-        self.Session = sessionmaker(bind=engine)
-
-        def override_get_db():
-            db = self.Session()
-            try:
-                yield db
-            except Exception:
-                db.rollback()
-                raise
-            finally:
-                db.close()
-
-        app.dependency_overrides[get_db] = override_get_db
-        self.addCleanup(app.dependency_overrides.clear)
-        self.client = TestClient(app)
-
-        db = self.Session()
-        self.users = {}
-        for role in UserRole:
-            user = User(
-                name=f"{role.value.title()} User",
-                email=f"{role.value.lower()}@example.com",
-                password=hash_password("Original123"),
-                role=role,
-            )
-            db.add(user)
-            db.flush()
-            self.users[role] = user.id
-        product = Product(sku="SKU-1", name="Widget", current_stock=10)
-        db.add(product)
-        db.commit()
-        self.product_id = product.id
-        db.close()
+        super().setUp()
+        company_id = self.make_company()
+        self.users = {
+            role: self.make_user(company_id, role, email=f"{role.value.lower()}@example.com")
+            for role in UserRole
+        }
+        self.product_id = self.add(Product(company_id=company_id, sku="SKU-1", name="Widget",
+                                           current_stock=10))
 
     def auth(self, role):
-        return {"Authorization": f"Bearer {create_access_token(self.users[role], role.value)}"}
+        return super().auth(self.users[role])
 
     def user(self, role):
-        db = self.Session()
-        try:
-            return db.get(User, self.users[role])
-        finally:
-            db.close()
+        return self.get(User, self.users[role])
 
     def stock(self):
         db = self.Session()

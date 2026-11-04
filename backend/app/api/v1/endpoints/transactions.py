@@ -13,6 +13,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.transaction import TransactionCreate, TransactionList, TransactionRead
 from app.services.audit import log_audit
+from app.services.csv_files import csv_response
 from app.services.stock import apply_stock_change
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -35,22 +36,7 @@ def _base_query(db: Session, company_id: str):
             .filter(Transaction.company_id == company_id))
 
 
-@router.get("", response_model=TransactionList)
-def list_transactions(
-    search: str | None = None,
-    product_id: str | None = None,
-    type: Literal["STOCK_IN", "STOCK_OUT"] | None = None,
-    user_id: str | None = None,
-    reference_type: str | None = None,
-    reference_id: str | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_member),
-):
-    q = _base_query(db, user.company_id)
+def _apply_filters(q, search, product_id, type, user_id, reference_type, reference_id, date_from, date_to):
     if search:
         like = f"%{search.strip()}%"
         q = q.filter(or_(Product.name.like(like), Product.sku.like(like),
@@ -69,10 +55,54 @@ def list_transactions(
         q = q.filter(Transaction.created_at >= datetime.combine(date_from, time.min))
     if date_to:  # inclusive of the whole end day
         q = q.filter(Transaction.created_at < datetime.combine(date_to + timedelta(days=1), time.min))
+    return q
 
+
+@router.get("", response_model=TransactionList)
+def list_transactions(
+    search: str | None = None,
+    product_id: str | None = None,
+    type: Literal["STOCK_IN", "STOCK_OUT"] | None = None,
+    user_id: str | None = None,
+    reference_type: str | None = None,
+    reference_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_member),
+):
+    q = _apply_filters(_base_query(db, user.company_id), search, product_id, type, user_id,
+                       reference_type, reference_id, date_from, date_to)
     total = q.count()
     rows = q.order_by(Transaction.created_at.desc()).offset(skip).limit(limit).all()
     return TransactionList(items=[_read(*r) for r in rows], total=total)
+
+
+# Declared before "/{transaction_id}" so "export" isn't treated as an id.
+@router.get("/export")
+def export_transactions(
+    search: str | None = None,
+    product_id: str | None = None,
+    type: Literal["STOCK_IN", "STOCK_OUT"] | None = None,
+    user_id: str | None = None,
+    reference_type: str | None = None,
+    reference_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_member),
+):
+    q = _apply_filters(_base_query(db, user.company_id), search, product_id, type, user_id,
+                       reference_type, reference_id, date_from, date_to)
+    return csv_response(
+        "transactions.csv",
+        ["date", "sku", "product", "type", "quantity", "reference_type", "reference_id", "recorded_by", "notes"],
+        ((t.created_at.isoformat() if t.created_at else None, sku, pname, t.type, t.quantity,
+          t.reference_type, t.reference_id, uname or key_name, t.notes)
+         for t, pname, sku, uname, key_name in q.order_by(Transaction.created_at.desc(), Transaction.id)),
+    )
 
 
 @router.get("/{transaction_id}", response_model=TransactionRead)

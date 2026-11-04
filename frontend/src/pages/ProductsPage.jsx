@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { categoriesApi, suppliersApi, locationsApi, productsApi, errorMessage } from "../api/resources"
 import PageShell from "../components/PageShell"
 import DataTable from "../components/DataTable"
 import Modal, { ConfirmDialog } from "../components/Modal"
+import ProductImportDialog from "../components/ProductImportDialog"
+import { saveBlob } from "../utils/download"
 import "./styles/common.css"
 import "../components/styles/Resource.css"
 
@@ -12,7 +15,7 @@ const WRITE_ROLES = ["OWNER", "ADMIN", "MANAGER"]
 const EMPTY = { sku: "", name: "", description: "", category_id: "", supplier_id: "", location_id: "", unit: "", price: "0.00", reorder_level: "0", initial_stock: "0" }
 
 // Dropdown data. The list endpoints cap `limit` at 200.
-function useLookups() {
+function useLookups(reloadKey) {
     const [lookups, setLookups] = useState({ categories: [], suppliers: [], locations: [] })
     useEffect(() => {
         let ignore = false
@@ -28,7 +31,7 @@ function useLookups() {
         return () => {
             ignore = true
         }
-    }, [])
+    }, [reloadKey])
     return lookups
 }
 
@@ -150,7 +153,8 @@ function ProductForm({ record, lookups, onSaved, onCancel }) {
 export default function ProductsPage() {
     const { user } = useAuth()
     const canWrite = WRITE_ROLES.includes(user?.role)
-    const lookups = useLookups()
+    const [lookupsKey, setLookupsKey] = useState(0)
+    const lookups = useLookups(lookupsKey)
 
     const nameOf = useMemo(() => {
         const map = (list) => Object.fromEntries(list.map((x) => [x.id, x.name]))
@@ -159,7 +163,14 @@ export default function ProductsPage() {
 
     const [search, setSearch] = useState("")
     const [debounced, setDebounced] = useState("")
-    const [filters, setFilters] = useState({ category_id: "", supplier_id: "", location_id: "", low_stock: false })
+    // The dashboard's low-stock links open this page as /products?low_stock=true.
+    const [searchParams] = useSearchParams()
+    const [filters, setFilters] = useState({
+        category_id: "",
+        supplier_id: "",
+        location_id: "",
+        low_stock: searchParams.get("low_stock") === "true",
+    })
     const [skip, setSkip] = useState(0)
     const [rows, setRows] = useState([])
     const [hasNext, setHasNext] = useState(false)
@@ -172,6 +183,8 @@ export default function ProductsPage() {
     const [deleteBusy, setDeleteBusy] = useState(false)
     const [deleteError, setDeleteError] = useState("")
     const [toast, setToast] = useState("")
+    const [importing, setImporting] = useState(false)
+    const [exporting, setExporting] = useState(false)
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -228,6 +241,25 @@ export default function ProductsPage() {
         setSkip(0)
     }
 
+    // Exports what the current search and filters show, across all pages.
+    async function handleExport() {
+        setExporting(true)
+        try {
+            const blob = await productsApi.exportCsv({
+                search: debounced,
+                category_id: filters.category_id,
+                supplier_id: filters.supplier_id,
+                location_id: filters.location_id,
+                low_stock: filters.low_stock ? "true" : "",
+            })
+            saveBlob(blob, "products.csv")
+        } catch (err) {
+            setToast(errorMessage(err, "Couldn't export. Please try again."))
+        } finally {
+            setExporting(false)
+        }
+    }
+
     async function confirmDelete() {
         setDeleteBusy(true)
         setDeleteError("")
@@ -268,7 +300,15 @@ export default function ProductsPage() {
         <PageShell
             title="Products"
             subtitle="SKUs, pricing, and reorder levels."
-            actions={canWrite && <button className="btn btn-primary" onClick={() => setEditing({})}>+ New product</button>}
+            actions={
+                <div className="page-actions">
+                    <button className="btn btn-ghost" onClick={handleExport} disabled={exporting}>
+                        {exporting ? "Exporting…" : "Export CSV"}
+                    </button>
+                    {canWrite && <button className="btn btn-ghost" onClick={() => setImporting(true)}>Import CSV</button>}
+                    {canWrite && <button className="btn btn-primary" onClick={() => setEditing({})}>+ New product</button>}
+                </div>
+            }
         >
             <div className="toolbar">
                 <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU or name…" aria-label="Search" />
@@ -319,6 +359,19 @@ export default function ProductsPage() {
                     onSaved={(_p, wasEdit) => {
                         setEditing(null)
                         setToast(`Product ${wasEdit ? "updated" : "created"}`)
+                        reload()
+                    }}
+                />
+            )}
+
+            {importing && (
+                <ProductImportDialog
+                    onCancel={() => setImporting(false)}
+                    onImported={(result) => {
+                        setImporting(false)
+                        setToast(`Imported ${result.products} product${result.products === 1 ? "" : "s"}`)
+                        setSkip(0)
+                        setLookupsKey((k) => k + 1) // the import may have added categories etc.
                         reload()
                     }}
                 />

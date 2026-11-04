@@ -11,6 +11,10 @@ export async function register({ name, email, password, companyName }) {
     return data
 }
 
+export async function changePassword(currentPassword, newPassword) {
+    await client.post("/auth/change-password", { current_password: currentPassword, new_password: newPassword })
+}
+
 export async function getCurrentUser() {
     const { data } = await client.get("/auth/me")
     return data

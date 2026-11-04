@@ -1,7 +1,7 @@
 import { useState } from "react"
 import LedgerPage from "../components/LedgerPage"
 import Modal from "../components/Modal"
-import ProductField, { useProducts } from "../components/ProductField"
+import ProductField from "../components/ProductField"
 import { adjustmentsApi } from "../api/ledger"
 import { errorMessage } from "../api/resources"
 import { useAuth } from "../context/AuthContext"
@@ -39,7 +39,6 @@ const columns = [
 const EMPTY = { product_id: "", quantity_change: "", reason: "", notes: "" }
 
 function AdjustmentForm({ onSaved, onCancel }) {
-    const { products, loading } = useProducts()
     const [v, setV] = useState(EMPTY)
     const [error, setError] = useState("")
     const [saving, setSaving] = useState(false)
@@ -92,8 +91,6 @@ function AdjustmentForm({ onSaved, onCancel }) {
                 <ProductField
                     value={v.product_id}
                     onChange={(id) => setV((s) => ({ ...s, product_id: id }))}
-                    products={products}
-                    loading={loading}
                 />
 
                 <label className="field field--half">
@@ -139,6 +136,7 @@ export default function AdjustmentsPage() {
             actionLabel="+ New adjustment"
             CreateForm={AdjustmentForm}
             canCreate={canCreate}
+            exportFilename="adjustments.csv"
             notice={!canCreate ? "You have read-only access to this page." : undefined}
         />
     )

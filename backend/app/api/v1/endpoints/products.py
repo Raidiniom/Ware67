@@ -1,20 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_member, require_roles
 from app.db.session import get_db
+from app.models.category import Category
+from app.models.location import Location
 from app.models.product import Product
+from app.models.supplier import Supplier
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
+from app.schemas.product import ProductCreate, ProductImportResult, ProductRead, ProductUpdate
 from app.services.audit import log_audit
+from app.services.csv_files import csv_response
+from app.services.product_import import MAX_FILE_BYTES, apply_import, plan_import
 from app.services.tenancy import ensure_product_refs, get_owned_or_404
 
 router = APIRouter(prefix="/products", tags=["products"])
 writer = require_roles("ADMIN", "MANAGER")
+
+# Enough to fix a bad file in a few passes, without an enormous response.
+MAX_IMPORT_ERRORS_RETURNED = 200
 
 
 def _get_product_or_404(product_id: str, db: Session, company_id: str) -> Product:
@@ -27,6 +36,21 @@ def _ensure_unique_sku(sku: str, db: Session, company_id: str, product_id: str |
         query = query.filter(Product.id != product_id)
     if query.first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "A product with this SKU already exists")
+
+
+def _apply_filters(query, search, category_id, supplier_id, location_id, low_stock):
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(Product.sku.ilike(term), Product.name.ilike(term)))
+    if category_id:
+        query = query.filter(Product.category_id == category_id)
+    if supplier_id:
+        query = query.filter(Product.supplier_id == supplier_id)
+    if location_id:
+        query = query.filter(Product.location_id == location_id)
+    if low_stock:
+        query = query.filter(Product.current_stock <= Product.reorder_level)
+    return query
 
 
 @router.get("", response_model=list[ProductRead])
@@ -42,18 +66,71 @@ def list_products(
     current_user: User = Depends(get_current_member),
 ):
     query = db.query(Product).filter(Product.company_id == current_user.company_id)
-    if search:
-        term = f"%{search.strip()}%"
-        query = query.filter(or_(Product.sku.ilike(term), Product.name.ilike(term)))
-    if category_id:
-        query = query.filter(Product.category_id == category_id)
-    if supplier_id:
-        query = query.filter(Product.supplier_id == supplier_id)
-    if location_id:
-        query = query.filter(Product.location_id == location_id)
-    if low_stock:
-        query = query.filter(Product.current_stock <= Product.reorder_level)
+    query = _apply_filters(query, search, category_id, supplier_id, location_id, low_stock)
     return query.order_by(Product.name.asc()).offset(skip).limit(limit).all()
+
+
+# Declared before "/{product_id}" so "export" isn't treated as an id.
+@router.get("/export")
+def export_products(
+    search: str | None = Query(default=None, max_length=200),
+    category_id: str | None = None,
+    supplier_id: str | None = None,
+    location_id: str | None = None,
+    low_stock: bool | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_member),
+):
+    """Every matching product as CSV, in the column layout /import accepts."""
+    query = (db.query(Product, Category.name, Supplier.name, Location.name)
+             .outerjoin(Category, Category.id == Product.category_id)
+             .outerjoin(Supplier, Supplier.id == Product.supplier_id)
+             .outerjoin(Location, Location.id == Product.location_id)
+             .filter(Product.company_id == current_user.company_id))
+    query = _apply_filters(query, search, category_id, supplier_id, location_id, low_stock)
+    return csv_response(
+        "products.csv",
+        ["sku", "name", "description", "category", "supplier", "location", "unit", "price",
+         "reorder_level", "current_stock"],
+        ((p.sku, p.name, p.description, category, supplier, location, p.unit, p.price,
+          p.reorder_level, p.current_stock)
+         for p, category, supplier, location in query.order_by(Product.name.asc(), Product.id)),
+    )
+
+
+@router.post("/import", response_model=ProductImportResult)
+def import_products(
+    request: Request,
+    file: UploadFile = File(...),
+    dry_run: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(writer),
+):
+    """Creates products from a CSV file: all of them, or none if any row is
+    invalid. dry_run=true checks the file and reports what would happen."""
+    company_id = current_user.company_id
+    # One byte over the limit is enough for plan_import to refuse the file.
+    plan = plan_import(db, file.file.read(MAX_FILE_BYTES + 1), company_id)
+    if plan.errors:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={
+                "detail": f"Problems found: {len(plan.errors)}. Nothing was imported.",
+                "errors": plan.errors[:MAX_IMPORT_ERRORS_RETURNED],
+            },
+        )
+
+    if not dry_run:
+        apply_import(db, plan, current_user.id, company_id, request)
+        db.commit()
+    return ProductImportResult(
+        dry_run=dry_run,
+        products=len(plan.products),
+        opening_stock_units=sum(product.initial_stock for product, _ in plan.products),
+        new_categories=sorted(plan.new_names["category"].values()),
+        new_suppliers=sorted(plan.new_names["supplier"].values()),
+        new_locations=sorted(plan.new_names["location"].values()),
+    )
 
 
 @router.get("/{product_id}", response_model=ProductRead)

@@ -291,6 +291,7 @@ Then every other request can just use `Authorization: Bearer {{access_token}}` w
 - API base URL is set via `VITE_API_BASE_URL` in the frontend's `.env` — locally this points at your tunneled/local backend; in production (`frontend/.env.production`) it should be `https://ware67-api.dcism.org`.
 - `frontend/src/api/client.js` already attaches the JWT from `localStorage` (`ware67_token`) to every request via an axios interceptor — after login, store the `access_token` there.
 - CORS: the backend's `main.py` has an explicit `allow_origins` list in `CORSMiddleware` — if you add a new frontend origin (e.g. a preview deploy URL), it must be added there or requests will be silently blocked by the browser.
+- **CSV import and export** (`app/services/product_import.py`, `csv_files.py`): an import is all or nothing, and only creates products. A SKU that already exists is a row error rather than an update. The Products page runs `POST /products/import?dry_run=true` first to preview the file, then the real import once it's confirmed. Exports neutralise cells that spreadsheets would run as formulas, and the import undoes that, so an exported file can be imported again unchanged.
 
 ---
 

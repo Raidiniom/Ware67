@@ -165,3 +165,55 @@
 		margin-bottom: 8px;
 	}
 }
+/* Searchable product picker */
+.product-picker {
+	position: relative;
+}
+
+.product-picker-list {
+	position: absolute;
+	z-index: 20;
+	top: 100%;
+	left: 0;
+	right: 0;
+	max-height: 240px;
+	margin: 2px 0 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+	border: 1px solid var(--dashboard-line);
+	background: var(--dashboard-white);
+	box-shadow: var(--dashboard-shadow);
+}
+
+.product-picker-list li {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 9px 12px;
+	color: var(--dashboard-ink);
+	font: 12px/1.45 Arial, sans-serif;
+	cursor: pointer;
+}
+
+.product-picker-list li.is-active {
+	background: var(--dashboard-green-soft);
+}
+
+.product-picker-list li span {
+	color: inherit;
+	font: inherit;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+.product-picker-list small {
+	flex-shrink: 0;
+	color: var(--dashboard-muted);
+	font-size: 11px;
+}
+
+.product-picker-list .product-picker-note {
+	color: var(--dashboard-muted);
+	cursor: default;
+}

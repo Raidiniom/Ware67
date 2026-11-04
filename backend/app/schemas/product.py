@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+MAX_INT = 2_147_483_647  # the largest value MySQL's INT column holds
+
 
 class ProductBase(BaseModel):
     sku: str = Field(min_length=1, max_length=100)
@@ -13,7 +15,7 @@ class ProductBase(BaseModel):
     location_id: str | None = Field(default=None, max_length=36)
     unit: str | None = Field(default=None, max_length=50)
     price: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=12, decimal_places=2)
-    reorder_level: int = Field(default=0, ge=0)
+    reorder_level: int = Field(default=0, ge=0, le=MAX_INT)
 
     @field_validator("sku", "name")
     @classmethod
@@ -45,7 +47,7 @@ class ProductUpdate(BaseModel):
     location_id: str | None = Field(default=None, max_length=36)
     unit: str | None = Field(default=None, max_length=50)
     price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
-    reorder_level: int | None = Field(default=None, ge=0)
+    reorder_level: int | None = Field(default=None, ge=0, le=MAX_INT)
 
     @field_validator("sku", "name")
     @classmethod
@@ -73,3 +75,13 @@ class ProductRead(ProductBase):
     current_stock: int
     created_at: datetime
     updated_at: datetime
+
+
+class ProductImportResult(BaseModel):
+    """What an import created, or with dry_run, what it would create."""
+    dry_run: bool
+    products: int
+    opening_stock_units: int
+    new_categories: list[str]
+    new_suppliers: list[str]
+    new_locations: list[str]

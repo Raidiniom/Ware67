@@ -49,4 +49,11 @@ export const productsApi = {
     remove: async (id) => {
         await client.delete(`/products/${id}`)
     },
+    exportCsv: async (params) =>
+        (await client.get("/products/export", { params: cleanParams(params), responseType: "blob" })).data,
+    importCsv: async (file, { dryRun }) => {
+        const form = new FormData()
+        form.append("file", file)
+        return (await client.post("/products/import", form, { params: { dry_run: dryRun } })).data
+    },
 }

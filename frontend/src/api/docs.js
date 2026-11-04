@@ -72,6 +72,10 @@ export const GROUPS = [
                 body: { refresh_token: "" },
             }),
             ep("GET", "/auth/me", "The signed-in user and their role"),
+            ep("POST", "/auth/change-password", "Change your own password", {
+                body: { current_password: "changeme123", new_password: "newpassword456" },
+                notes: "Returns 204. Returns 400 if the current password is wrong.",
+            }),
             ep("POST", "/auth/onboard", "Set a user's role and active flag", {
                 access: WRITE,
                 body: { user_id: "", role: "STAFF", is_active: true },
@@ -150,6 +154,33 @@ export const GROUPS = [
                 access: WRITE,
                 notes: "Fails with 409 if the product has transaction or adjustment history.",
             }),
+            ep("GET", "/products/export", "Download products as CSV", {
+                query: [
+                    { name: "search" },
+                    { name: "category_id" },
+                    { name: "supplier_id" },
+                    { name: "location_id" },
+                    { name: "low_stock", hint: BOOL },
+                ],
+                notes: "Every matching product, in the column layout /products/import accepts.",
+            }),
+            ep("POST", "/products/import", "Create products from a CSV file", {
+                access: WRITE,
+                query: [{ name: "dry_run", hint: BOOL }],
+                notes:
+                    "Send the file as multipart/form-data in a field named file, so it can't be tried from this page. " +
+                    "Columns: sku and name are required; description, category, supplier, location, unit, price, " +
+                    "reorder_level and initial_stock are optional. All or nothing: any bad row returns 422 with an " +
+                    "errors list and saves nothing. Limits: 2 MB and 5,000 rows.",
+            }),
+        ],
+    },
+    {
+        name: "Dashboard",
+        endpoints: [
+            ep("GET", "/dashboard/summary", "Stock totals, low-stock items and recent movements", {
+                notes: "stock_value is current stock at selling price, since products have no cost price.",
+            }),
         ],
     },
     {
@@ -216,6 +247,18 @@ export const GROUPS = [
                 },
                 notes: "STOCK_OUT returns 409 if it would take stock below zero. The user comes from your token.",
             }),
+            ep("GET", "/transactions/export", "Download transactions as CSV", {
+                query: [
+                    { name: "search" },
+                    { name: "product_id" },
+                    { name: "type", hint: "STOCK_IN / STOCK_OUT" },
+                    { name: "user_id" },
+                    { name: "reference_type" },
+                    { name: "reference_id" },
+                    { name: "date_from", hint: "YYYY-MM-DD" },
+                    { name: "date_to", hint: "YYYY-MM-DD" },
+                ],
+            }),
         ],
     },
     {
@@ -237,6 +280,16 @@ export const GROUPS = [
                 access: WRITE,
                 body: { product_id: "", quantity_change: -3, reason: "Damaged", notes: "" },
                 notes: "quantity_change is signed and cannot be zero.",
+            }),
+            ep("GET", "/adjustments/export", "Download adjustments as CSV", {
+                query: [
+                    { name: "search" },
+                    { name: "product_id" },
+                    { name: "user_id" },
+                    { name: "reason" },
+                    { name: "date_from", hint: "YYYY-MM-DD" },
+                    { name: "date_to", hint: "YYYY-MM-DD" },
+                ],
             }),
         ],
     },

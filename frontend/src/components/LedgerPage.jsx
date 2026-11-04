@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { errorMessage } from "../api/resources"
+import { saveBlob } from "../utils/download"
 import PageShell from "./PageShell"
 import DataTable from "./DataTable"
 import Pagination from "./Pagination"
@@ -22,6 +23,7 @@ const PAGE_SIZE = 20
  * - canCreate:   whether to show the create button
  * - Detail:      component receiving { row, onClose }; adds a "View" row action
  * - notice:      optional note under the toolbar (e.g. read-only message)
+ * - exportFilename: adds an "Export CSV" button; needs api.exportCsv(params)
  */
 export default function LedgerPage({
     title,
@@ -37,6 +39,7 @@ export default function LedgerPage({
     canCreate = false,
     Detail,
     notice,
+    exportFilename,
 }) {
     const [search, setSearch] = useState("")
     const [debounced, setDebounced] = useState("")
@@ -51,6 +54,7 @@ export default function LedgerPage({
     const [creating, setCreating] = useState(false)
     const [viewing, setViewing] = useState(null)
     const [toast, setToast] = useState("")
+    const [exporting, setExporting] = useState(false)
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -104,6 +108,18 @@ export default function LedgerPage({
     const isFiltered =
         Boolean(debounced) || Object.values(filterValues).some(Boolean) || Boolean(dates.date_from || dates.date_to)
 
+    // Exports what the current search and filters show, across all pages.
+    async function handleExport() {
+        setExporting(true)
+        try {
+            saveBlob(await api.exportCsv({ search: debounced, ...filterValues, ...dates }), exportFilename)
+        } catch (err) {
+            setToast(errorMessage(err, "Couldn't export. Please try again."))
+        } finally {
+            setExporting(false)
+        }
+    }
+
     function clearAll() {
         setSearch("")
         setDebounced("")
@@ -117,12 +133,18 @@ export default function LedgerPage({
             title={title}
             subtitle={subtitle}
             actions={
-                canCreate &&
-                CreateForm && (
-                    <button className="btn btn-primary" onClick={() => setCreating(true)}>
-                        {actionLabel}
-                    </button>
-                )
+                <div className="page-actions">
+                    {exportFilename && (
+                        <button className="btn btn-ghost" onClick={handleExport} disabled={exporting}>
+                            {exporting ? "Exporting…" : "Export CSV"}
+                        </button>
+                    )}
+                    {canCreate && CreateForm && (
+                        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+                            {actionLabel}
+                        </button>
+                    )}
+                </div>
             }
         >
             <div className="toolbar">

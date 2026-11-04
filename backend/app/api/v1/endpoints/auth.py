@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from jose import JWTError
 
@@ -15,6 +15,7 @@ from app.models.company import Company
 from app.models.role import Role
 from app.models.user import User, UserRole
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     OnboardRequest,
     RefreshRequest,
@@ -168,6 +169,32 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserRead)
 def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 400, not 401: the frontend treats 401 as an expired session and retries.
+    if not verify_password(payload.current_password, current_user.password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your current password is incorrect")
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a password different from your current one")
+
+    current_user.password = hash_password(payload.new_password)
+    log_audit(
+        db,
+        user_id=current_user.id,
+        action="CHANGE_PASSWORD",
+        entity=ENTITY,
+        entity_id=current_user.id,
+        request=request,
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/onboard", response_model=UserRead)

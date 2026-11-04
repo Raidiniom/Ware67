@@ -86,6 +86,15 @@ const ALL_MODULES = [
 		icon: "⚿",
 		category: "Administration",
 	},
+	{
+		key: "inbound",
+		path: "/inbound",
+		title: "Inbound Movement",
+		description: "Live view of stock arriving in the warehouse.",
+		roles: null,
+		icon: "↓",
+		category: "Operations",
+	},
 ]
 
 // The platform team manages companies and API keys, never a company's inventory.

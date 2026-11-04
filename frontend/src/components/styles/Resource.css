@@ -724,3 +724,52 @@
 		transition: none !important;
 	}
 }
+/* Buttons at the top right of a list page */
+.page-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+/* CSV import dialog */
+.import-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	color: var(--dashboard-ink);
+	font: 12px/1.55 Arial, sans-serif;
+}
+
+.import-dialog p {
+	margin: 0;
+}
+
+.import-dialog code {
+	padding: 1px 4px;
+	background: var(--dashboard-paper);
+	color: var(--dashboard-ink);
+	font-family: Consolas, Monaco, monospace;
+}
+
+.import-dialog .link-btn {
+	display: inline;
+	padding: 0;
+}
+
+.import-errors {
+	max-height: 260px;
+	overflow: auto;
+	border: 1px solid var(--dashboard-line);
+}
+
+.import-preview {
+	padding: 12px 14px;
+	border: 1px solid var(--dashboard-green);
+	background: var(--dashboard-green-soft);
+}
+
+.import-preview ul {
+	margin: 8px 0 0;
+	padding-left: 18px;
+}

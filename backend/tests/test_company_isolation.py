@@ -436,6 +436,7 @@ ROUTE_CLASSIFICATION = {
     ("POST", "/auth/login"): "public",
     ("POST", "/auth/refresh"): "public",
     ("GET", "/auth/me"): "self",
+    ("POST", "/auth/change-password"): "self",
     # Company data, scoped by the member's company_id (tested above).
     **{(m, p): "member" for m, p in (
         ("POST", "/auth/onboard"), ("PATCH", "/auth/update-role"), ("PATCH", "/auth/update-status"),
@@ -455,6 +456,9 @@ ROUTE_CLASSIFICATION = {
         ("GET", "/adjustments"), ("POST", "/adjustments"), ("GET", "/adjustments/{adjustment_id}"),
         ("GET", "/audit-logs"), ("GET", "/audit-logs/{log_id}"),
         ("GET", "/company"), ("PATCH", "/company"),
+        # Scoping of these is tested in test_practical_basics.py.
+        ("GET", "/dashboard/summary"), ("GET", "/products/export"), ("POST", "/products/import"),
+        ("GET", "/transactions/export"), ("GET", "/adjustments/export"),
         ("GET", "/company/api-keys"), ("POST", "/company/api-keys"),
         ("POST", "/company/api-keys/{api_key_id}/reveal"), ("DELETE", "/company/api-keys/{api_key_id}"),
     )},

@@ -1,7 +1,11 @@
+import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
+import ChangePasswordDialog from "../components/ChangePasswordDialog"
+import DashboardOverview from "../components/DashboardOverview"
 
 import "./styles/common.css"
+import "../components/styles/Ledger.css"
 import "./styles/DashboardPage.css"
 
 const ALL_MODULES = [
@@ -111,6 +115,14 @@ const PLATFORM_MODULES = [
 export default function DashboardPage() {
 	const { user, logout } = useAuth()
 	const navigate = useNavigate()
+	const [changingPassword, setChangingPassword] = useState(false)
+	const [toast, setToast] = useState("")
+
+	useEffect(() => {
+		if (!toast) return
+		const t = setTimeout(() => setToast(""), 3000)
+		return () => clearTimeout(t)
+	}, [toast])
 
 	function handleLogout() {
 		logout()
@@ -141,6 +153,13 @@ export default function DashboardPage() {
 
 						<strong>{user?.name || "User"}</strong>
 					</div>
+
+					<button
+						className="btn btn-outline dashboard-signout"
+						onClick={() => setChangingPassword(true)}
+					>
+						Change password
+					</button>
 
 					<button
 						className="btn btn-outline dashboard-signout"
@@ -193,10 +212,27 @@ export default function DashboardPage() {
 					</div>
 				</section>
 
+				{!isPlatformAdmin && (
+					<section className="dashboard-content dashboard-overview">
+						<div className="modules-heading">
+							<div>
+								<span className="section-label">01 / OVERVIEW</span>
+								<h2>Today</h2>
+							</div>
+
+							<p>What needs your attention, and what moved most recently.</p>
+						</div>
+
+						<DashboardOverview />
+					</section>
+				)}
+
 				<section className="dashboard-content">
 					<div className="modules-heading">
 						<div>
-							<span className="section-label">01 / MODULES</span>
+							<span className="section-label">
+								{isPlatformAdmin ? "01" : "02"} / MODULES
+							</span>
 							<h2>Operations</h2>
 						</div>
 
@@ -261,6 +297,22 @@ export default function DashboardPage() {
 				<span>WARE67 / OPERATIONS PLATFORM</span>
 				<span>{modules.length} modules available</span>
 			</footer>
+
+			{changingPassword && (
+				<ChangePasswordDialog
+					onCancel={() => setChangingPassword(false)}
+					onChanged={() => {
+						setChangingPassword(false)
+						setToast("Password changed")
+					}}
+				/>
+			)}
+
+			{toast && (
+				<div className="toast" role="status">
+					{toast}
+				</div>
+			)}
 		</div>
 	)
 }

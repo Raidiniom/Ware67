@@ -1,7 +1,7 @@
 import { useState } from "react"
 import LedgerPage from "../components/LedgerPage"
 import Modal from "../components/Modal"
-import ProductField, { useProducts } from "../components/ProductField"
+import ProductField from "../components/ProductField"
 import { transactionsApi } from "../api/ledger"
 import { errorMessage } from "../api/resources"
 import { useAuth } from "../context/AuthContext"
@@ -64,7 +64,6 @@ const filters = [
 const EMPTY = { product_id: "", type: "STOCK_IN", quantity: "1", reference_type: "", reference_id: "", notes: "" }
 
 function TransactionForm({ onSaved, onCancel }) {
-    const { products, loading } = useProducts()
     const [v, setV] = useState(EMPTY)
     const [error, setError] = useState("")
     const [saving, setSaving] = useState(false)
@@ -112,8 +111,6 @@ function TransactionForm({ onSaved, onCancel }) {
                 <ProductField
                     value={v.product_id}
                     onChange={(id) => setV((s) => ({ ...s, product_id: id }))}
-                    products={products}
-                    loading={loading}
                 />
 
                 <label className="field field--half">
@@ -162,6 +159,7 @@ export default function TransactionsPage() {
             actionLabel="+ New transaction"
             CreateForm={TransactionForm}
             canCreate={canCreate}
+            exportFilename="transactions.csv"
             notice={!canCreate ? "You have read-only access to this page." : undefined}
         />
     )

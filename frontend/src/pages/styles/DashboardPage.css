@@ -528,3 +528,169 @@
 		transition: none !important;
 	}
 }
+/* Overview: live numbers above the module cards */
+.dashboard-overview {
+	padding-bottom: 0;
+}
+
+.overview-note {
+	margin: 0;
+	padding: 22px;
+	border: 1px solid var(--dashboard-line);
+	background: var(--dashboard-paper-bright);
+	color: var(--dashboard-muted);
+	font: 13px/1.5 Arial, sans-serif;
+}
+
+.overview-note a,
+.overview-list header a {
+	color: var(--dashboard-green);
+	font-weight: 700;
+}
+
+.overview-stats {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 12px;
+}
+
+.overview-stat {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 18px;
+	border: 1px solid var(--dashboard-line);
+	background: var(--dashboard-paper-bright);
+	color: var(--dashboard-ink);
+	text-decoration: none;
+}
+
+a.overview-stat:hover {
+	border-color: var(--dashboard-green);
+}
+
+.overview-stat span {
+	color: var(--dashboard-muted);
+	font: 800 9px Arial, sans-serif;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+}
+
+.overview-stat strong {
+	overflow-wrap: anywhere;
+	font: 400 30px/1.1 Georgia, "Times New Roman", serif;
+}
+
+.overview-stat small {
+	color: var(--dashboard-muted);
+	font: 11px Arial, sans-serif;
+}
+
+.overview-stat--alert {
+	border-color: var(--dashboard-orange);
+}
+
+.overview-stat--alert strong {
+	color: #b5522a;
+}
+
+.overview-lists {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.overview-list {
+	min-width: 0;
+	border: 1px solid var(--dashboard-line);
+	background: var(--dashboard-paper-bright);
+}
+
+.overview-list header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 18px;
+	border-bottom: 1px solid var(--dashboard-line);
+	font: 11px Arial, sans-serif;
+}
+
+.overview-list h3 {
+	margin: 0;
+	font: 400 17px Georgia, "Times New Roman", serif;
+}
+
+.overview-list ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.overview-list li {
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 11px 18px;
+	border-bottom: 1px solid var(--dashboard-line);
+	font: 12px/1.4 Arial, sans-serif;
+}
+
+.overview-list li:last-child {
+	border-bottom: 0;
+}
+
+.overview-list li > div:first-child {
+	min-width: 0;
+}
+
+.overview-list li strong,
+.overview-list li small {
+	display: block;
+}
+
+.overview-list li small {
+	margin-top: 2px;
+	color: var(--dashboard-muted);
+	font-size: 11px;
+}
+
+.overview-qty {
+	flex-shrink: 0;
+	text-align: right;
+}
+
+.overview-empty {
+	margin: 0;
+	padding: 18px;
+	color: var(--dashboard-muted);
+	font: 12px Arial, sans-serif;
+}
+
+@media (max-width: 1050px) {
+	.overview-stats {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+@media (max-width: 800px) {
+	.overview-lists {
+		grid-template-columns: 1fr;
+	}
+
+	.dashboard-header-right {
+		gap: 10px;
+	}
+}
+
+@media (max-width: 540px) {
+	.overview-stats {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	/* The odd tile out holds the longest number. */
+	.overview-stat:last-child {
+		grid-column: 1 / -1;
+	}
+}

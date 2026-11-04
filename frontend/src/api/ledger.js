@@ -9,6 +9,8 @@ function cleanParams(params = {}) {
 export const transactionsApi = {
     list: async (params) => (await client.get("/transactions", { params: cleanParams(params) })).data,
     get: async (id) => (await client.get(`/transactions/${id}`)).data,
+    exportCsv: async (params) =>
+        (await client.get("/transactions/export", { params: cleanParams(params), responseType: "blob" })).data,
     create: async (body) => (await client.post("/transactions", body)).data,
 }
 
@@ -16,6 +18,8 @@ export const transactionsApi = {
 export const adjustmentsApi = {
     list: async (params) => (await client.get("/adjustments", { params: cleanParams(params) })).data,
     get: async (id) => (await client.get(`/adjustments/${id}`)).data,
+    exportCsv: async (params) =>
+        (await client.get("/adjustments/export", { params: cleanParams(params), responseType: "blob" })).data,
     create: async (body) => (await client.post("/adjustments", body)).data,
 }
 

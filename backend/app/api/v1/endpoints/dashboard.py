@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_member
@@ -14,6 +14,17 @@ from app.schemas.dashboard import DayPoint, InboundDashboard, InboundEvent, TopP
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+# Stock-ins that are not goods arriving. VERIFY against what products.py writes.
+EXCLUDED_REFS = ("INITIAL",)
+
+
+def _db_now(db: Session) -> datetime:
+    """Current time on the DB clock, the same clock that stamps created_at."""
+    now = db.query(func.now()).scalar()
+    if isinstance(now, str):  # SQLite returns text
+        now = datetime.fromisoformat(now)
+    return now.replace(tzinfo=None)
+
 
 @router.get("/inbound", response_model=InboundDashboard)
 def inbound_dashboard(
@@ -22,15 +33,16 @@ def inbound_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_member),
 ):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = _db_now(db)
     since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    base = [Transaction.company_id == user.company_id,
-            Transaction.type == "STOCK_IN",
-            Transaction.created_at >= since]
-
-    units, count = db.query(func.coalesce(func.sum(Transaction.quantity), 0),
-                            func.count(Transaction.id)).filter(*base).one()
+    base = [
+        Transaction.company_id == user.company_id,
+        Transaction.type == "STOCK_IN",
+        Transaction.created_at >= since,
+        or_(Transaction.reference_type.is_(None),
+            Transaction.reference_type.notin_(EXCLUDED_REFS)),
+    ]
 
     day = func.date(Transaction.created_at)
     per_day = {str(d): (int(u), int(c)) for d, u, c in
@@ -45,16 +57,21 @@ def inbound_dashboard(
     top = (db.query(Product.id, Product.sku, Product.name, func.sum(Transaction.quantity))
            .join(Transaction, Transaction.product_id == Product.id)
            .filter(*base).group_by(Product.id, Product.sku, Product.name)
-           .order_by(func.sum(Transaction.quantity).desc()).limit(5).all())
+           .order_by(func.sum(Transaction.quantity).desc(), Product.id).limit(5).all())
 
     feed = (db.query(Transaction, Product.name, Product.sku, User.name, ApiKey.name)
             .join(Product, Product.id == Transaction.product_id)
             .outerjoin(User, User.id == Transaction.user_id)
             .outerjoin(ApiKey, ApiKey.id == Transaction.api_key_id)
-            .filter(*base).order_by(Transaction.created_at.desc()).limit(recent).all())
+            .filter(*base)
+            .order_by(Transaction.created_at.desc(), Transaction.id.desc())  # stable tiebreak
+            .limit(recent).all())
 
     return InboundDashboard(
-        days=days, units_in=int(units), transactions=int(count), series=series,
+        days=days,
+        units_in=sum(p.units for p in series),
+        transactions=sum(p.transactions for p in series),
+        series=series,
         top_products=[TopProduct(product_id=i, sku=s, name=n, units=int(u)) for i, s, n, u in top],
         recent=[InboundEvent(id=t.id, created_at=t.created_at, product_name=pn, product_sku=sku,
                              quantity=t.quantity, reference_type=t.reference_type,

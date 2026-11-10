@@ -214,7 +214,7 @@ export const GROUPS = [
                     reference_id: "PO-1001",
                     notes: "",
                 },
-                notes: "STOCK_OUT returns 409 if it would take stock below zero. The user comes from your token.",
+                notes: "STOCK_OUT returns 409 if it would take stock below zero. The user comes from your token. reference_type INITIAL is reserved for opening stock (422).",
             }),
         ],
     },

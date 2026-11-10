@@ -1,39 +1,63 @@
-   import { useCallback, useEffect, useState } from "react"
-   import PageShell from "../components/PageShell"
-   import { getInbound } from "../api/dashboard"
-   import { errorMessage } from "../api/resources"
-   import { formatDateTime } from "../utils/format"
-   import "./styles/common.css"
-   import "../components/styles/Resource.css"
-   import "./styles/Inbound.css"
-
+import { useCallback, useEffect, useState } from "react"
+import PageShell from "../components/PageShell"
+import { getInbound } from "../api/dashboard"
+import { errorMessage } from "../api/resources"
+import { formatDateTime } from "../utils/format"
+import "./styles/common.css"
+import "../components/styles/Resource.css"
+import "./styles/Inbound.css"
 
 const POLL_MS = 5000
 const STOP_ON = [403, 404] // permanent errors: don't keep hammering
 
+// Polls while the tab is visible. Hidden tabs don't poll at all; coming back
+// fetches straight away so stale data isn't shown as live.
 function usePolling(fetcher, ms) {
     const [state, setState] = useState({ data: null, error: "", updatedAt: null })
 
     useEffect(() => {
         let ignore = false
-        let timer
-        async function tick() {
-            let retry = true
-            if (!document.hidden) {
-                try {
-                    const data = await fetcher()
-                    if (!ignore) setState({ data, error: "", updatedAt: new Date() })
-                } catch (err) {
-                    if (STOP_ON.includes(err.response?.status)) retry = false
-                    if (!ignore) setState((s) => ({ ...s, error: errorMessage(err, "Couldn't refresh.") }))
-                }
-            }
-            if (!ignore && retry) timer = setTimeout(tick, ms)
+        let stopped = false
+        let inFlight = false
+        let timer = null
+
+        function schedule(delay) {
+            clearTimeout(timer)
+            timer = null
+            if (!ignore && !stopped && !document.hidden) timer = setTimeout(tick, delay)
         }
-        timer = setTimeout(tick, 0)
+
+        async function tick() {
+            timer = null
+            if (inFlight) return // the running request schedules the next one
+            inFlight = true
+            try {
+                const data = await fetcher()
+                if (!ignore) setState({ data, error: "", updatedAt: new Date() })
+            } catch (err) {
+                if (STOP_ON.includes(err.response?.status)) stopped = true
+                if (!ignore) setState((s) => ({ ...s, error: errorMessage(err, "Couldn't refresh.") }))
+            } finally {
+                inFlight = false
+            }
+            schedule(ms)
+        }
+
+        function onVisibilityChange() {
+            if (document.hidden) {
+                clearTimeout(timer)
+                timer = null
+            } else {
+                schedule(0)
+            }
+        }
+
+        document.addEventListener("visibilitychange", onVisibilityChange)
+        schedule(0)
         return () => {
             ignore = true
             clearTimeout(timer)
+            document.removeEventListener("visibilitychange", onVisibilityChange)
         }
     }, [fetcher, ms])
 

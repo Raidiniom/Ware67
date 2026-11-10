@@ -284,6 +284,7 @@ CREATE TABLE transactions (
     KEY idx_transactions_product_id (product_id),
     KEY idx_transactions_user_id (user_id),
     KEY idx_transactions_api_key_id (api_key_id),
+    KEY idx_transactions_company_type_created (company_id, type, created_at),
     CONSTRAINT fk_transactions_company
         FOREIGN KEY (company_id) REFERENCES companies (id)
         ON UPDATE CASCADE ON DELETE RESTRICT,

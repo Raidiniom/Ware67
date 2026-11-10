@@ -11,7 +11,7 @@ from app.models.category import Category
 from app.models.location import Location
 from app.models.product import Product
 from app.models.supplier import Supplier
-from app.models.transaction import Transaction
+from app.models.transaction import OPENING_STOCK_REF, Transaction
 from app.schemas.category import CategoryRead
 from app.schemas.location import LocationRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
@@ -119,7 +119,7 @@ def create_partner_product(
             api_key_id=api_key.id,
             type="STOCK_IN",
             quantity=initial_stock,
-            reference_type="INITIAL",
+            reference_type=OPENING_STOCK_REF,
             notes=f"Opening stock via partner API key: {api_key.name}",
         )
         db.add(txn)
@@ -131,7 +131,7 @@ def create_partner_product(
                 "quantity": initial_stock,
                 "previous_value": 0,
                 "new_value": initial_stock,
-                "reference_type": "INITIAL",
+                "reference_type": OPENING_STOCK_REF,
             },
         )
     try:

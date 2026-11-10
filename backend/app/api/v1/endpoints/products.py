@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_member, require_roles
 from app.db.session import get_db
 from app.models.product import Product
-from app.models.transaction import Transaction
+from app.models.transaction import OPENING_STOCK_REF, Transaction
 from app.models.user import User
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.services.audit import log_audit
@@ -81,7 +81,7 @@ def create_product(payload: ProductCreate, request: Request,
 
     if initial_stock > 0:                    # opening stock gets a history row
         txn = Transaction(company_id=company_id, product_id=product.id, user_id=current_user.id,
-                          type="STOCK_IN", quantity=initial_stock, reference_type="INITIAL",
+                          type="STOCK_IN", quantity=initial_stock, reference_type=OPENING_STOCK_REF,
                           notes="Opening stock")
         db.add(txn)
         db.flush()
@@ -89,7 +89,7 @@ def create_product(payload: ProductCreate, request: Request,
                   entity_id=txn.id,
                   details={"product_id": product.id, "quantity": initial_stock,
                            "previous_value": 0, "new_value": initial_stock,
-                           "reference_type": "INITIAL"},
+                           "reference_type": OPENING_STOCK_REF},
                   request=request)
     try:
         db.commit()

@@ -6,6 +6,8 @@ bottom, so a new endpoint fails test_every_route_is_classified until someone
 decides how it is isolated and adds tests for it.
 """
 import unittest
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.main import app
 from app.models.audit_log import AuditLog
@@ -17,7 +19,7 @@ from app.models.product import Product
 from app.models.supplier import Supplier
 from app.models.transaction import Transaction
 from app.models.user import User, UserRole
-from support import PASSWORD, ApiTestCase
+from support import PASSWORD, ApiTestCase, utcnow
 
 API = "/api/v1"
 ALL_SCOPES = ("products:read", "products:create", "products:update", "products:delete")
@@ -428,7 +430,18 @@ class OwnerRoleTests(ApiTestCase):
     def test_owner_has_admin_access(self):
         self.assertEqual(self.client.get(f"{API}/audit-logs", headers=self.auth(self.owner)).status_code, 200)
 
+
 class InboundDashboardTests(IsolationTestCase):
+    def inbound(self, **params):
+        response = self.client.get(f"{API}/dashboard/inbound", params=params,
+                                   headers=self.auth(self.a_owner))
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def stock_in_at(self, created_at, quantity):
+        return self.add(Transaction(company_id=self.a, product_id=self.a_product, user_id=self.a_owner,
+                                    type="STOCK_IN", quantity=quantity, created_at=created_at))
+
     def test_only_own_stock_in_is_counted(self):
         a = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.a_owner)).json()
         self.assertEqual(a["units_in"], 10)
@@ -444,15 +457,76 @@ class InboundDashboardTests(IsolationTestCase):
         a = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.a_owner)).json()
         self.assertEqual(a["units_in"], 10)
 
-    def test_bars_add_up_to_total(self):
-        a = self.client.get(f"{API}/dashboard/inbound?days=7", headers=self.auth(self.a_owner)).json()
+    def test_rows_land_on_their_own_day(self):
+        self.stock_in_at(utcnow() - timedelta(days=2), 4)
+        a = self.inbound(days=7)
         self.assertEqual(len(a["series"]), 7)
-        self.assertEqual(sum(p["units"] for p in a["series"]), a["units_in"])
-        self.assertEqual(a["top_products"][0]["units"], 10)
+        self.assertEqual([p["units"] for p in a["series"][-3:]], [4, 0, 10])
+        self.assertEqual(a["series"][-1]["date"], datetime.now(timezone.utc).date().isoformat())
+        self.assertEqual(a["top_products"][0]["units"], 14)
+
+    def test_rows_older_than_the_window_are_dropped(self):
+        old = self.stock_in_at(utcnow() - timedelta(days=10), 5)
+        week = self.inbound(days=7)
+        self.assertEqual((week["units_in"], week["transactions"]), (10, 1))
+        self.assertEqual(week["top_products"][0]["units"], 10)
+        self.assertNotIn(old, {e["id"] for e in week["recent"]})
+        fortnight = self.inbound(days=14)
+        self.assertEqual(fortnight["units_in"], 15)
+        self.assertIn(old, {e["id"] for e in fortnight["recent"]})
+
+    def test_opening_stock_is_not_inbound(self):
+        created = [
+            self.client.post(f"{API}/products", headers=self.auth(self.a_owner),
+                             json={"sku": "NEW-1", "name": "New", "initial_stock": 50}),
+            self.client.post(f"{API}/integration/products", headers={"X-API-Key": self.a_key},
+                             json={"sku": "NEW-2", "name": "Via key", "initial_stock": 70}),
+        ]
+        for response in created:
+            self.assertEqual(response.status_code, 201, response.text)
+        a = self.inbound()
+        self.assertEqual((a["units_in"], a["transactions"]), (10, 1))
+        new_ids = {r.json()["id"] for r in created}
+        self.assertFalse(new_ids & {p["product_id"] for p in a["top_products"]})
+        self.assertEqual([e["id"] for e in a["recent"]], [self.a_txn])
+
+    def test_recorders_cannot_claim_opening_stock(self):
+        for ref in ("INITIAL", "initial", " Initial "):
+            with self.subTest(ref=ref):
+                response = self.client.post(
+                    f"{API}/transactions", headers=self.auth(self.a_owner),
+                    json={"product_id": self.a_product, "type": "STOCK_IN", "quantity": 5,
+                          "reference_type": ref})
+                self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.a_product_row().current_stock, 10)
+
+    def test_days_follow_the_viewers_time_zone(self):
+        # 07:00 yesterday in Manila (UTC+8) is 23:00 UTC the day before.
+        manila = ZoneInfo("Asia/Manila")
+        yesterday = datetime.now(manila).date() - timedelta(days=1)
+        local = datetime.combine(yesterday, time(7), manila)
+        txn = self.stock_in_at(local.astimezone(timezone.utc).replace(tzinfo=None), 3)
+
+        a = self.inbound(days=7, tz="Asia/Manila")
+        self.assertEqual(a["tz"], "Asia/Manila")
+        self.assertEqual(a["series"][-2], {"date": yesterday.isoformat(), "units": 3, "transactions": 1})
+        event = next(e for e in a["recent"] if e["id"] == txn)
+        self.assertEqual(datetime.fromisoformat(event["created_at"]), local)  # aware, same instant
+
+        utc = self.inbound(days=7, tz="UTC")
+        self.assertEqual(utc["series"][-3]["date"], (yesterday - timedelta(days=1)).isoformat())
+        self.assertEqual(utc["series"][-3]["units"], 3)
+
+    def test_unknown_time_zone_is_422(self):
+        response = self.client.get(f"{API}/dashboard/inbound", params={"tz": "Mars/Base"},
+                                   headers=self.auth(self.a_owner))
+        self.assertEqual(response.status_code, 422)
 
     def test_platform_team_is_refused(self):
         response = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.platform_id))
         self.assertEqual(response.status_code, 403)
+
+
 # Every /api/v1 route and how it is kept inside one company.
 ROUTE_CLASSIFICATION = {
     # Public or about the caller's own account.

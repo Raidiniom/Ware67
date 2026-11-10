@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 
 class DayPoint(BaseModel):
-    date: str
+    date: str  # YYYY-MM-DD in the requested time zone
     units: int
     transactions: int
 
@@ -17,7 +17,7 @@ class TopProduct(BaseModel):
 
 class InboundEvent(BaseModel):
     id: str
-    created_at: datetime | None
+    created_at: datetime | None  # timezone-aware, UTC
     product_name: str
     product_sku: str
     quantity: int
@@ -28,6 +28,7 @@ class InboundEvent(BaseModel):
 
 class InboundDashboard(BaseModel):
     days: int
+    tz: str
     units_in: int
     transactions: int
     series: list[DayPoint]

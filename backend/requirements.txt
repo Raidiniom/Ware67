@@ -37,3 +37,4 @@ websockets==17.1
 pymysql
 pydantic[email]
 httpx2==2.13.1  # test-only: starlette 1.x TestClient needs httpx2, not httpx
+tzdata  # time zone data for zoneinfo on Windows, which has no system copy

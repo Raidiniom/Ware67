@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.models.transaction import OPENING_STOCK_REF
 from app.schemas.common import blank_to_none
 
 
@@ -20,7 +21,10 @@ class TransactionCreate(BaseModel):
     @field_validator("reference_type")
     @classmethod
     def _upper(cls, v):
-        return v.upper() if v else v
+        v = v.upper() if v else v
+        if v == OPENING_STOCK_REF:
+            raise ValueError(f"{OPENING_STOCK_REF} is reserved for opening stock set when a product is created")
+        return v
 
 
 class TransactionRead(BaseModel):

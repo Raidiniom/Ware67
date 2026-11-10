@@ -428,7 +428,31 @@ class OwnerRoleTests(ApiTestCase):
     def test_owner_has_admin_access(self):
         self.assertEqual(self.client.get(f"{API}/audit-logs", headers=self.auth(self.owner)).status_code, 200)
 
+class InboundDashboardTests(IsolationTestCase):
+    def test_only_own_stock_in_is_counted(self):
+        a = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.a_owner)).json()
+        self.assertEqual(a["units_in"], 10)
+        self.assertEqual(len(a["recent"]), 1)
+        b = self.client.get(f"{API}/dashboard/inbound", headers=self.as_b()).json()
+        self.assertEqual(b["units_in"], 0)
+        self.assertEqual(b["recent"], [])
 
+    def test_stock_out_is_not_inbound(self):
+        r = self.client.post(f"{API}/transactions", headers=self.auth(self.a_owner),
+                             json={"product_id": self.a_product, "type": "STOCK_OUT", "quantity": 3})
+        self.assertLess(r.status_code, 300)
+        a = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.a_owner)).json()
+        self.assertEqual(a["units_in"], 10)
+
+    def test_bars_add_up_to_total(self):
+        a = self.client.get(f"{API}/dashboard/inbound?days=7", headers=self.auth(self.a_owner)).json()
+        self.assertEqual(len(a["series"]), 7)
+        self.assertEqual(sum(p["units"] for p in a["series"]), a["units_in"])
+        self.assertEqual(a["top_products"][0]["units"], 10)
+
+    def test_platform_team_is_refused(self):
+        response = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.platform_id))
+        self.assertEqual(response.status_code, 403)
 # Every /api/v1 route and how it is kept inside one company.
 ROUTE_CLASSIFICATION = {
     # Public or about the caller's own account.
@@ -457,6 +481,7 @@ ROUTE_CLASSIFICATION = {
         ("GET", "/company"), ("PATCH", "/company"),
         ("GET", "/company/api-keys"), ("POST", "/company/api-keys"),
         ("POST", "/company/api-keys/{api_key_id}/reveal"), ("DELETE", "/company/api-keys/{api_key_id}"),
+        ("GET", "/dashboard/inbound"),
     )},
     # Company data, scoped by the API key's company_id (tested above).
     **{(m, p): "api_key" for m, p in (

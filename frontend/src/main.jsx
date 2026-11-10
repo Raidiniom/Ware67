@@ -21,6 +21,8 @@ import ApiKeysPage from './pages/ApiKeysPage.jsx'
 import PlatformPage from './pages/PlatformPage.jsx'
 import './readability.css'
 import ApiDocsPage from './pages/ApiDocsPage.jsx'
+import InboundDashboardPage from './pages/InboundDashboardPage.jsx'
+
 
 const protect = (page) => <ProtectedRoute>{page}</ProtectedRoute>
 
@@ -45,6 +47,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/audit-logs" element={protect(<AuditLogsPage />)} />
           <Route path="/api-keys" element={protect(<ApiKeysPage />)} />
           <Route path="/platform" element={protect(<PlatformPage />)} />
+          <Route path="/inbound" element={protect(<InboundDashboardPage />)} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

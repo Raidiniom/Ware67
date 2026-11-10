@@ -6,6 +6,7 @@ bottom, so a new endpoint fails test_every_route_is_classified until someone
 decides how it is isolated and adds tests for it.
 """
 import unittest
+from unittest.mock import patch
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -501,26 +502,37 @@ class InboundDashboardTests(IsolationTestCase):
         self.assertEqual(self.a_product_row().current_stock, 10)
 
     def test_days_follow_the_viewers_time_zone(self):
-        # 07:00 yesterday in Manila (UTC+8) is 23:00 UTC the day before.
+        # 07:00 Mar 10 in Manila (UTC+8) is 23:00 UTC on Mar 9. Pin the clock
+        # both before and after 08:00 Manila, when the UTC date catches up.
+        # (A past date, clear of the fixture's row stamped with the real now.)
         manila = ZoneInfo("Asia/Manila")
-        yesterday = datetime.now(manila).date() - timedelta(days=1)
-        local = datetime.combine(yesterday, time(7), manila)
+        local = datetime(2026, 3, 10, 7, 0, tzinfo=manila)
         txn = self.stock_in_at(local.astimezone(timezone.utc).replace(tzinfo=None), 3)
 
-        a = self.inbound(days=7, tz="Asia/Manila")
-        self.assertEqual(a["tz"], "Asia/Manila")
-        self.assertEqual(a["series"][-2], {"date": yesterday.isoformat(), "units": 3, "transactions": 1})
-        event = next(e for e in a["recent"] if e["id"] == txn)
-        self.assertEqual(datetime.fromisoformat(event["created_at"]), local)  # aware, same instant
+        def bar(body, day):
+            return next(p for p in body["series"] if p["date"] == day.isoformat())
 
-        utc = self.inbound(days=7, tz="UTC")
-        self.assertEqual(utc["series"][-3]["date"], (yesterday - timedelta(days=1)).isoformat())
-        self.assertEqual(utc["series"][-3]["units"], 3)
+        for clock in (datetime(2026, 3, 11, 1, 0, tzinfo=manila),
+                      datetime(2026, 3, 11, 13, 0, tzinfo=manila)):
+            with self.subTest(clock=clock), patch(
+                    "app.api.v1.endpoints.dashboard._db_clock",
+                    return_value=(clock.astimezone(timezone.utc), timedelta(0))):
+                a = self.inbound(days=7, tz="Asia/Manila")
+                self.assertEqual(a["tz"], "Asia/Manila")
+                self.assertEqual(a["series"][-1]["date"], "2026-03-11")
+                self.assertEqual(bar(a, local.date()), {"date": "2026-03-10", "units": 3, "transactions": 1})
+                event = next(e for e in a["recent"] if e["id"] == txn)
+                self.assertEqual(datetime.fromisoformat(event["created_at"]), local)  # aware, same instant
 
-    def test_unknown_time_zone_is_422(self):
-        response = self.client.get(f"{API}/dashboard/inbound", params={"tz": "Mars/Base"},
-                                   headers=self.auth(self.a_owner))
-        self.assertEqual(response.status_code, 422)
+                utc = self.inbound(days=7, tz="UTC")
+                self.assertEqual(utc["series"][-1]["date"], clock.astimezone(timezone.utc).date().isoformat())
+                self.assertEqual(bar(utc, local.astimezone(timezone.utc).date())["units"], 3)
+                self.assertEqual(bar(utc, local.date())["units"], 0)
+
+    def test_unknown_time_zone_falls_back_to_utc(self):
+        body = self.inbound(tz="Mars/Base")
+        self.assertEqual(body["tz"], "UTC")
+        self.assertEqual(body["units_in"], 10)
 
     def test_platform_team_is_refused(self):
         response = self.client.get(f"{API}/dashboard/inbound", headers=self.auth(self.platform_id))

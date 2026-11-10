@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, or_, text
 from sqlalchemy.orm import Session
 
@@ -34,11 +34,15 @@ def _db_clock(db: Session) -> tuple[datetime, timedelta]:
     return now.astimezone(timezone.utc), now.utcoffset()
 
 
-def _zone(name: str) -> ZoneInfo:
+def _zone(name: str) -> tuple[ZoneInfo, str]:
+    """The viewer's zone, or UTC if this server's tz database doesn't know it.
+
+    The response's tz says which one was used, so the page can tell.
+    """
     try:
-        return ZoneInfo(name)
+        return ZoneInfo(name), name
     except (ZoneInfoNotFoundError, ValueError):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown time zone: {name}")
+        return ZoneInfo("UTC"), "UTC"
 
 
 @router.get("/inbound", response_model=InboundDashboard)
@@ -49,7 +53,7 @@ def inbound_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_member),
 ):
-    zone = _zone(tz)
+    zone, tz = _zone(tz)
     now, ahead = _db_clock(db)
 
     def to_db(d: date) -> datetime:  # local midnight -> naive DB-clock value

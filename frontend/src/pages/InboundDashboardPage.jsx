@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import PageShell from "../components/PageShell"
-import { getInbound } from "../api/dashboard"
+import { getInbound, TIME_ZONE } from "../api/dashboard"
 import { errorMessage } from "../api/resources"
 import { formatDateTime } from "../utils/format"
 import "./styles/common.css"
@@ -8,7 +8,7 @@ import "../components/styles/Resource.css"
 import "./styles/Inbound.css"
 
 const POLL_MS = 5000
-const STOP_ON = [403, 404] // permanent errors: don't keep hammering
+const STOP_ON = [403, 404, 422] // permanent errors: don't keep hammering
 
 // Polls while the tab is visible. Hidden tabs don't poll at all; coming back
 // fetches straight away so stale data isn't shown as live.
@@ -97,6 +97,7 @@ function InboundBoard({ days }) {
                 {error
                     ? <>Not live · last updated {formatDateTime(updatedAt)}</>
                     : <><span className="live-dot" /> Live · updated {formatDateTime(updatedAt)}</>}
+                {data.tz !== TIME_ZONE && <> · days counted in {data.tz}</>}
             </p>
 
             <div className="inbound-stats">
